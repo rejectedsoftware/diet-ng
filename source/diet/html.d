@@ -6,8 +6,8 @@ import diet.internal.string;
 
 
 string htmlAttribEscape(string s) { return s; }
-string writeHTMLEscaped(R)(ref R dst, string s) { dst.put(s); }
-string writeHTMLAttribgEscaped(R)(ref R dst, string s) { dst.put(s); }
+void writeHTMLEscaped(R)(ref R dst, string s) { dst.put(s); }
+void writeHTMLAttribEscaped(R)(ref R dst, string s) { dst.put(s); }
 
 
 enum defaultOutputRangeName = "__output";
@@ -16,7 +16,7 @@ string getHTMLMixin(in Node[] nodes, string range_name = defaultOutputRangeName)
 {
 	assert(nodes.length > 0, "Cannot render empty Diet file.");
 	CTX ctx;
-	string ret;
+	string ret = "import std.conv : to;\n";
 	foreach (n; nodes)
 		ret ~= ctx.getHTMLMixin(n, range_name);
 	return ret;
@@ -35,6 +35,8 @@ unittest {
 
 	test!"doctype html\nfoo(test=true)"("<!DOCTYPE html><foo test></foo>");
 	test!"doctype X\nfoo(test=true)"("<!DOCTYPE X><foo test=\"test\"></foo>");
+	test!"foo(test=2+3)"("<foo test=\"5\"></foo>");
+	test!"foo(test='#{2+3}')"("<foo test=\"5\"></foo>");
 }
 
 private string getHTMLMixin(ref CTX ctx, in Node node, string range_name = defaultOutputRangeName)
@@ -132,7 +134,7 @@ private string getElementMixin(ref CTX ctx, in Node node, string range_name)
 					ret ~= rawText(node.loc, range_name, htmlAttribEscape(v.value));
 					break;
 				case interpolation, rawInterpolation:
-					ret ~= statement(node.loc, q{%s.writeHTMLAttribEscaped(%s);}, range_name, v.value);
+					ret ~= statement(node.loc, q{%s.writeHTMLAttribEscaped((%s).to!string);}, range_name, v.value);
 					break;
 			}
 		}
