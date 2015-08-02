@@ -2,6 +2,7 @@ module diet.internal.string;
 
 import std.ascii : isWhite;
 
+pure:
 
 string ctstrip(string s)
 {

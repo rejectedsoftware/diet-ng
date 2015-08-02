@@ -72,8 +72,7 @@ enum NodeAttribs {
 
 struct Attribute {
 	string name;
-	string expression;
-	AttributeContent[] value;
+	AttributeContent[] values;
 }
 
 struct AttributeContent {
@@ -95,7 +94,6 @@ struct NodeContent {
 	enum Kind {
 		node,
 		text,
-		expression,
 		interpolation,
 		rawInterpolation
 	}
@@ -107,7 +105,6 @@ struct NodeContent {
 
 	static NodeContent tag(Node node) { return NodeContent(Kind.node, node.loc, node); }
 	static NodeContent text(string text, Location loc) { return NodeContent(Kind.text, loc, Node.init, text); }
-	static NodeContent expression(string text, Location loc) { return NodeContent(Kind.expression, loc, Node.init, text); }
 	static NodeContent interpolation(string text, Location loc) { return NodeContent(Kind.interpolation, loc, Node.init, text); }
 	static NodeContent rawInterpolation(string text, Location loc) { return NodeContent(Kind.rawInterpolation, loc, Node.init, text); }
 
