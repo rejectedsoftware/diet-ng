@@ -16,9 +16,10 @@ string getHTMLMixin(in Node[] nodes, string range_name = defaultOutputRangeName)
 {
 	assert(nodes.length > 0, "Cannot render empty Diet file.");
 	CTX ctx;
+	ctx.rangeName = range_name;
 	string ret = "import std.conv : to;\n";
 	foreach (n; nodes)
-		ret ~= ctx.getHTMLMixin(n, range_name);
+		ret ~= ctx.getHTMLMixin(n);
 	return ret;
 }
 
@@ -39,17 +40,103 @@ unittest {
 	test!"foo(test='#{2+3}')"("<foo test=\"5\"></foo>");
 	test!"foo #{2+3}"("<foo>5</foo>");
 	test!"foo= 2+3"("<foo>5</foo>");
+	test!"- int x = 3;\nfoo=x"("<foo>3</foo>");
+	test!"- foreach (i; 0 .. 2)\n\tfoo"("<foo></foo><foo></foo>");
 }
 
-private string getHTMLMixin(ref CTX ctx, in Node node, string range_name = defaultOutputRangeName)
+private string getHTMLMixin(ref CTX ctx, in Node node)
 {
 	switch (node.name) {
-		case "doctype", "!!!": return ctx.getDoctypeMixin(node, range_name);
-		default: return ctx.getElementMixin(node, range_name);
+		default: return ctx.getElementMixin(node);
+		case "doctype", "!!!": return ctx.getDoctypeMixin(node);
+		case "-": return ctx.getCodeMixin(node);
+		case "//": // TODO!
+		case "//-": return null;
 	}
 }
 
-private string getDoctypeMixin(ref CTX ctx, in Node node, string range_name)
+private string getElementMixin(ref CTX ctx, in Node node)
+{
+	// write tag name
+	string ret = statement(node.loc, q{%s.put("<%s");}, ctx.rangeName, node.name);
+
+	// write attributes
+	foreach (att; node.attributes) {
+		bool is_expr = att.values.length == 1 && att.values[0].kind == AttributeContent.Kind.interpolation;
+
+		if (is_expr) {
+			auto expr = att.values[0].value;
+
+			if (expr == "true") {
+				if (ctx.isHTML5) ret ~= statement(node.loc, q{%s.put(" %s");}, ctx.rangeName, att.name);
+				else ret ~= statement(node.loc, q{%s.put(" %s=\"%s\"");}, ctx.rangeName, att.name, att.name);
+				continue;
+			}
+
+			ret ~= statement(node.loc, q{static if (is(typeof(%s) == bool)) }~'{', expr);
+			if (ctx.isHTML5) ret ~= statement(node.loc, q{if (%s) %s.put(" %s");}, expr, ctx.rangeName, att.name);
+			else ret ~= statement(node.loc, q{if (%s) %s.put(" %s=\"%s\"");}, expr, ctx.rangeName, att.name, att.name);
+			ret ~= statement(node.loc, "} else {");
+		}
+
+		ret ~= statement(node.loc, q{%s.put(" %s=\"");}, ctx.rangeName, att.name);
+		foreach (i, v; att.values) {
+			final switch (v.kind) with (AttributeContent.Kind) {
+				case text:
+					ret ~= rawText(node.loc, ctx.rangeName, htmlAttribEscape(v.value));
+					break;
+				case interpolation, rawInterpolation:
+					ret ~= statement(node.loc, q{%s.writeHTMLAttribEscaped((%s).to!string);}, ctx.rangeName, v.value);
+					break;
+			}
+		}
+		ret ~= rawText(node.loc, ctx.rangeName, "\"");
+
+		if (is_expr) ret ~= statement(node.loc, "}");
+	}
+
+	// determine if we need a closing tag or have a singular tag
+	switch (node.name) {
+		case "area", "base", "basefont", "br", "col", "embed", "frame",	"hr", "img", "input",
+				"keygen", "link", "meta", "param", "source", "track", "wbr":
+			enforcep(!node.contents.length, "Singular HTML element '"~node.name~"' may not have contents.", node.loc);
+			ret ~= rawText(node.loc, ctx.rangeName, "/>");
+		default:
+			ret ~= rawText(node.loc, ctx.rangeName, ">");
+			break;
+	}
+
+	// write contents
+	ctx.depth++;
+	foreach (c; node.contents)
+		ret ~= ctx.getNodeContentsMixin(c);
+	ctx.depth--;
+
+	// write end tag
+	ret ~= statement(node.loc, q{%s.put("</%s>");}, ctx.rangeName, node.name);
+
+	return ret;
+}
+
+private string getNodeContentsMixin(ref CTX ctx, in NodeContent c)
+{
+	final switch (c.kind) with (NodeContent.Kind) {
+		case node:
+			string ret;
+			ret ~= ctx.prettyNewLine(c.loc);
+			ret ~= getElementMixin(ctx, c.node);
+			ret ~= ctx.prettyNewLine(c.loc);
+			return ret;
+		case text:
+			return rawText(c.loc, ctx.rangeName, c.value);
+		case interpolation:
+			return statement(c.loc, q{%s.writeHTMLEscaped((%s).to!string);}, ctx.rangeName, c.value);
+		case rawInterpolation:
+			return statement(c.loc, q{%s.put((%s).to!string);}, ctx.rangeName, c.value);
+	}
+}
+
+private string getDoctypeMixin(ref CTX ctx, in Node node)
 {
 	import diet.internal.string;
 
@@ -102,90 +189,26 @@ private string getDoctypeMixin(ref CTX ctx, in Node node, string range_name)
 		break;
 	}
 
-	return statement(node.loc, q{%s.put("<%s>");}, range_name, dstringEscape(doctype_str));
+	return statement(node.loc, q{%s.put("<%s>");}, ctx.rangeName, dstringEscape(doctype_str));
 }
 
-private string getElementMixin(ref CTX ctx, in Node node, string range_name)
+private string getCodeMixin(ref CTX ctx, in ref Node node)
 {
-	// write tag name
-	string ret = statement(node.loc, q{%s.put("<%s");}, range_name, node.name);
+	enforcep(node.attributes.length == 0, "Code lines may not have attributes.", node.loc);
+	enforcep(node.attribs == NodeAttribs.none, "Code lines may not specify translation or text block suffixes.", node.loc);
+	if (node.contents.length == 0) return null;
 
-	// write attributes
-	foreach (att; node.attributes) {
-		bool is_expr = att.values.length == 1 && att.values[0].kind == AttributeContent.Kind.interpolation;
-
-		if (is_expr) {
-			auto expr = att.values[0].value;
-
-			if (expr == "true") {
-				if (ctx.isHTML5) ret ~= statement(node.loc, q{%s.put(" %s");}, range_name, att.name);
-				else ret ~= statement(node.loc, q{%s.put(" %s=\"%s\"");}, range_name, att.name, att.name);
-				continue;
-			}
-
-			ret ~= statement(node.loc, q{static if (is(typeof(%s) == bool)) }~'{', expr);
-			if (ctx.isHTML5) ret ~= statement(node.loc, q{if (%s) %s.put(" %s");}, expr, range_name, att.name);
-			else ret ~= statement(node.loc, q{if (%s) %s.put(" %s=\"%s\"");}, expr, range_name, att.name, att.name);
-			ret ~= statement(node.loc, "} else {");
-		}
-
-		ret ~= statement(node.loc, q{%s.put(" %s=\"");}, range_name, att.name);
-		foreach (i, v; att.values) {
-			final switch (v.kind) with (AttributeContent.Kind) {
-				case text:
-					ret ~= rawText(node.loc, range_name, htmlAttribEscape(v.value));
-					break;
-				case interpolation, rawInterpolation:
-					ret ~= statement(node.loc, q{%s.writeHTMLAttribEscaped((%s).to!string);}, range_name, v.value);
-					break;
-			}
-		}
-		ret ~= rawText(node.loc, range_name, "\"");
-
-		if (is_expr) ret ~= statement(node.loc, "}");
-	}
-
-	// determine if we need a closing tag or have a singular tag
-	switch (node.name) {
-		case "area", "base", "basefont", "br", "col", "embed", "frame",	"hr", "img", "input",
-				"keygen", "link", "meta", "param", "source", "track", "wbr":
-			enforcep(!node.contents.length, "Singular HTML element '"~node.name~"' may not have contents.", node.loc);
-			ret ~= rawText(node.loc, range_name, "/>");
-		default:
-			ret ~= rawText(node.loc, range_name, ">");
-			break;
-	}
-
-	void prettyNewLine() {
-		import std.array : replicate;
-		if (ctx.pretty) ret ~= rawText(node.loc, range_name, "\n"~"\t".replicate(ctx.depth));
-	}
-
-	// write contents
-	foreach (c; node.contents) {
-		final switch (c.kind) with (NodeContent.Kind) {
-			case node:
-				prettyNewLine();
-				ctx.depth++;
-				ret ~= getElementMixin(ctx, c.node, range_name);
-				ctx.depth--;
-				prettyNewLine();
-				break;
-			case text:
-				ret ~= rawText(c.loc, range_name, c.value);
-				break;
-			case interpolation:
-				ret ~= statement(c.loc, q{%s.writeHTMLEscaped((%s).to!string);}, range_name, c.value);
-				break;
-			case rawInterpolation:
-				ret ~= statement(c.loc, q{%s.put((%s).to!string);}, range_name, c.value);
-				break;
+	string ret;
+	bool got_code = false;
+	foreach (i, c; node.contents) {
+		if (i == 0 && c.kind == NodeContent.Kind.text) {
+			ret ~= statement(node.loc, "%s {", c.value);
+			got_code = true;
+		} else {
+			ret ~= ctx.getNodeContentsMixin(c);
 		}
 	}
-
-	// write end tag
-	ret ~= statement(node.loc, q{%s.put("</%s>");}, range_name, node.name);
-
+	ret ~= statement(node.loc, "}");
 	return ret;
 }
 
@@ -202,6 +225,13 @@ private pure string rawText(ARGS...)(Location loc, string range_name, string tex
 
 private struct CTX {
 	bool isHTML5;
-	bool pretty = true;
+	bool pretty = false;
 	int depth = 0;
+	string rangeName;
+
+	string prettyNewLine(in ref Location loc) {
+		import std.array : replicate;
+		if (pretty) return rawText(loc, rangeName, "\n"~"\t".replicate(depth));
+		else return null;
+	}
 }
