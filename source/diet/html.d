@@ -55,7 +55,7 @@ private string getDoctypeMixin(ref CTX ctx, in Node node, string range_name)
 	enforcep(node.contents.length == 1 && node.contents[0].kind == NodeContent.Kind.text,
 		"Only doctype specifiers allowed as content for doctype nodes.", node.loc);
 
-	auto args = ctstrip(node.contents[0].contents);
+	auto args = ctstrip(node.contents[0].value);
 
 	ctx.isHTML5 = false;
 
@@ -111,7 +111,7 @@ private string getElementMixin(ref CTX ctx, in Node node, string range_name)
 		bool is_expr = att.values.length == 1 && att.values[0].kind == AttributeContent.Kind.interpolation;
 
 		if (is_expr) {
-			auto expr = att.values[0].contents;
+			auto expr = att.values[0].value;
 
 			if (expr == "true") {
 				if (ctx.isHTML5) ret ~= statement(node.loc, q{%s.put(" %s");}, range_name, att.name);
@@ -129,10 +129,10 @@ private string getElementMixin(ref CTX ctx, in Node node, string range_name)
 		foreach (i, v; att.values) {
 			final switch (v.kind) with (AttributeContent.Kind) {
 				case text:
-					ret ~= rawText(node.loc, range_name, htmlAttribEscape(v.contents));
+					ret ~= rawText(node.loc, range_name, htmlAttribEscape(v.value));
 					break;
 				case interpolation, rawInterpolation:
-					ret ~= statement(node.loc, q{%s.writeHTMLAttribEscaped(%s);}, range_name, v.contents);
+					ret ~= statement(node.loc, q{%s.writeHTMLAttribEscaped(%s);}, range_name, v.value);
 					break;
 			}
 		}
@@ -168,13 +168,13 @@ private string getElementMixin(ref CTX ctx, in Node node, string range_name)
 				prettyNewLine();
 				break;
 			case text:
-				ret ~= rawText(c.loc, range_name, c.contents);
+				ret ~= rawText(c.loc, range_name, c.value);
 				break;
 			case interpolation:
-				ret ~= statement(c.loc, q{%s.writeHTMLEscaped((%s).to!string);}, range_name, c.contents);
+				ret ~= statement(c.loc, q{%s.writeHTMLEscaped((%s).to!string);}, range_name, c.value);
 				break;
 			case rawInterpolation:
-				ret ~= statement(c.loc, q{%s.put((%s).to!string);}, range_name, c.contents);
+				ret ~= statement(c.loc, q{%s.put((%s).to!string);}, range_name, c.value);
 				break;
 		}
 	}

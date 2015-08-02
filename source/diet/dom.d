@@ -22,21 +22,21 @@ class Node {
 	void addText(string text, in ref Location loc)
 	{
 		if (contents.length && contents[$-1].kind == NodeContent.Kind.text && contents[$-1].loc == loc)
-			contents[$-1].contents ~= text;
+			contents[$-1].value ~= text;
 		else contents ~= NodeContent.text(text, loc);
 	}
 
 	void stripIfOnlyWhitespace()
 	{
-		if (contents.length == 1 && contents[0].kind == NodeContent.Kind.text && contents[0].contents.ctstrip.length == 0)
+		if (contents.length == 1 && contents[0].kind == NodeContent.Kind.text && contents[0].value.ctstrip.length == 0)
 			contents = null;
 	}
 
 	void stripLeadingWhitespace()
 	{
 		while (contents.length >= 1 && contents[0].kind == NodeContent.Kind.text) {
-			contents[0].contents = ctstripLeft(contents[0].contents);
-			if (contents[0].contents.length == 0)
+			contents[0].value = ctstripLeft(contents[0].value);
+			if (contents[0].value.length == 0)
 				contents = contents[1 .. $];
 			else break;
 		}
@@ -45,8 +45,8 @@ class Node {
 	void stripTrailingWhitespace()
 	{
 		while (contents.length >= 1 && contents[$-1].kind == NodeContent.Kind.text) {
-			contents[$-1].contents = ctstripRight(contents[$-1].contents);
-			if (contents[$-1].contents.length == 0)
+			contents[$-1].value = ctstripRight(contents[$-1].value);
+			if (contents[$-1].value.length == 0)
 				contents = contents[0 .. $-1];
 			else break;
 		}
@@ -83,7 +83,7 @@ struct AttributeContent {
 	}
 
 	Kind kind;
-	string contents;
+	string value;
 
 	static AttributeContent text(string text) { return AttributeContent(Kind.text, text); }
 	static AttributeContent interpolation(string expression) { return AttributeContent(Kind.interpolation, expression); }
@@ -101,7 +101,7 @@ struct NodeContent {
 	Kind kind;
 	Location loc;
 	Node node;
-	string contents;
+	string value;
 
 	static NodeContent tag(Node node) { return NodeContent(Kind.node, node.loc, node); }
 	static NodeContent text(string text, Location loc) { return NodeContent(Kind.text, loc, Node.init, text); }
@@ -110,7 +110,7 @@ struct NodeContent {
 
 	bool opEquals(in ref NodeContent other)
 	{
-		return this.kind == other.kind && this.loc == other.loc && this.node == other.node && this.contents == other.contents;
+		return this.kind == other.kind && this.loc == other.loc && this.node == other.node && this.value == other.value;
 	}
 }
 
