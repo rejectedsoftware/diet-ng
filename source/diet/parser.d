@@ -25,49 +25,77 @@ Node parseDiet(InputFile[] files)
 	return parseDiet(files, 0);
 }
 
-unittest {
+unittest { // test basic functionality
 	import std.conv : text;
 
+	Location ln(int l) { return Location("string", l); }
+
+	// simple node
 	assert(parseDiet("test").contents == [
-		NodeContent.tag(new Node(Location("string", 0), "test"))
+		NodeContent.tag(new Node(ln(0), "test"))
 	]);
-		
+
+	// nested nodes
 	assert(parseDiet("foo\n  bar").contents == [
-		NodeContent.tag(new Node(Location("string", 0), "foo", null, [
-			NodeContent.tag(new Node(Location("string", 1), "bar"))
+		NodeContent.tag(new Node(ln(0), "foo", null, [
+			NodeContent.tag(new Node(ln(1), "bar"))
 		]))
 	]);
 
+	// node with id and classes
 	assert(parseDiet("test#id.cls1.cls2").contents == [
-		NodeContent.tag(new Node(Location("string", 0), "test", [
+		NodeContent.tag(new Node(ln(0), "test", [
 			Attribute("id", null, [AttributeContent.text("id")]),
 			Attribute("class", null, [AttributeContent.text("cls1")]),
 			Attribute("class", null, [AttributeContent.text("cls2")])
 		]))
 	]);
 
+	// node with attributes
 	assert(parseDiet("test(foo1=\"bar\", foo2=\"baz\")").contents == [
-		NodeContent.tag(new Node(Location("string", 0), "test", [
+		NodeContent.tag(new Node(ln(0), "test", [
 			Attribute("foo1", null, [AttributeContent.text("bar")]),
 			Attribute("foo2", null, [AttributeContent.text("baz")])
 		]))
-	], text(parseDiet("test(foo1=\"bar\", foo2=\"baz\")").contents));
+	]);
 
+	// node with pure text contents
 	assert(parseDiet("foo.\n  hello\n      world").contents == [
-		NodeContent.tag(new Node(Location("string", 0), "foo", null, [
-			NodeContent.text("hello\n", Location("string", 1)),
-			NodeContent.text("    world", Location("string", 2))
+		NodeContent.tag(new Node(ln(0), "foo", null, [
+			NodeContent.text("hello\n", ln(1)),
+			NodeContent.text("    world", ln(2))
 		], NodeAttribs.textNode))
 	], text(parseDiet("foo.\n  hello\n      world").contents));
 
+	// translated text
 	assert(parseDiet("foo& test").contents == [
-		NodeContent.tag(new Node(Location("string", 0), "foo", null, [
-			NodeContent.text("test", Location("string", 0))
+		NodeContent.tag(new Node(ln(0), "foo", null, [
+			NodeContent.text("test", ln(0))
 		], NodeAttribs.translated))
-	], text(parseDiet("foo& test").contents));
+	]);
+
+	// interpolated text
+	assert(parseDiet("foo hello #{\"world\"} bar").contents == [
+		NodeContent.tag(new Node(ln(0), "foo", null, [
+			NodeContent.text("hello ", ln(0)),
+			NodeContent.interpolation(`"world"`, ln(0)),
+			NodeContent.text(" bar", ln(0))
+		]))
+	]);
+
+	// interpolated text
+	assert(parseDiet("foo(att='hello #{\"world\"} bar')").contents == [
+		NodeContent.tag(new Node(ln(0), "foo", [
+			Attribute("att", null, [
+				AttributeContent.text("hello "),
+				AttributeContent.interpolation(`"world"`),
+				AttributeContent.text(" bar")
+			])
+		]))
+	]);
 }
 
-unittest {
+unittest { // test expected errors
 	void testFail(string diet, string msg)
 	{
 		try {
@@ -86,6 +114,11 @@ unittest {
 	testFail("test !.", "Expected '{' following '!'.");
 	testFail("test ##", "Use '\\#' instead of '##' for escaping.");
 	testFail("test !!", "Use '\\!' instead of '!!' for escaping.");
+}
+
+unittest { // test CTFE-ability
+	static const result = parseDiet("foo#id.cls(att=\"val\", att2=1+3, att3='test#{4}it')\n\tbar");
+	static assert(result.contents.length == 1);
 }
 
 string generate(ALIASES...)(Node node)
@@ -228,7 +261,9 @@ private void parseTextLine(ref string input, ref Node dst, ref Location loc)
 				enforcep(idx < input.length && (input[idx] == cur || input[idx] == '{'),
 					"Expected '{' following '"~cur~"'.", loc);
 				enforcep(input[idx] == '{', "Use '\\"~cur~"' instead of '"~cur~cur~"' for escaping.", loc);
+				idx++;
 				auto expr = skipUntilClosingBrace(input, idx, loc);
+				idx++;
 				if (cur == '#') dst.contents ~= NodeContent.interpolation(expr, loc);
 				else dst.contents ~= NodeContent.rawInterpolation(expr, loc);
 				sidx = idx;
@@ -323,7 +358,9 @@ private void parseAttributeText(string input, ref AttributeContent[] dst, in ref
 				enforcep(idx < input.length && (input[idx] == cur || input[idx] == '{'),
 					"Expected '{' following '"~cur~"'.", loc);
 				enforcep(input[idx] == '{', "Use '\\"~cur~"' instead of '"~cur~cur~"' for escaping.", loc);
-				auto expr = skipUntilClosingBrace(input, idx, loc);
+				idx++;
+				auto expr = dstringUnescape(skipUntilClosingBrace(input, idx, loc));
+				idx++;
 				if (cur == '#') dst ~= AttributeContent.interpolation(expr);
 				else dst ~= AttributeContent.rawInterpolation(expr);
 				sidx = idx;
@@ -509,7 +546,12 @@ private string skipAttribString(in ref string s, ref size_t idx, char delimiter,
 
 private void enforcep(bool cond, lazy string text, in ref Location loc)
 {
-	if (!cond) throw new DietParserException(text, loc.file, loc.line+1);
+	if (__ctfe) {
+		import std.string : format;
+		assert(cond, format("%s(%s): %s", loc.file, loc.line+1, text));
+	} else {
+		if (!cond) throw new DietParserException(text, loc.file, loc.line+1);
+	}
 }
 
 
