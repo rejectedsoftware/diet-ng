@@ -84,13 +84,36 @@ unittest { // test basic functionality
 		])
 	]);
 
-	// interpolated text
+	// expression
+	assert(parseDiet("foo= 1+2") == [
+		new Node(ln(0), "foo", null, [
+			NodeContent.interpolation(`1+2`, ln(0)),
+		])
+	], text(parseDiet("foo= 1+2")));
+
+	// raw expression
+	assert(parseDiet("foo!= 1+2") == [
+		new Node(ln(0), "foo", null, [
+			NodeContent.rawInterpolation(`1+2`, ln(0)),
+		])
+	]);
+
+	// interpolated attribute text
 	assert(parseDiet("foo(att='hello #{\"world\"} bar')") == [
 		new Node(ln(0), "foo", [
 			Attribute("att", [
 				AttributeContent.text("hello "),
 				AttributeContent.interpolation(`"world"`),
 				AttributeContent.text(" bar")
+			])
+		])
+	]);
+
+	// attribute expression
+	assert(parseDiet("foo(att=1+2)") == [
+		new Node(ln(0), "foo", [
+			Attribute("att", [
+				AttributeContent.interpolation(`1+2`),
 			])
 		])
 	]);
@@ -220,14 +243,28 @@ private Node parseTagLine(ref string input, ref Location loc)
 		parseAttributes(input, idx, ret, loc);
 
 	if (idx < input.length && input[idx] == '&') { ret.attribs |= NodeAttribs.translated; idx++; }
-	textBlock:
-	if (idx < input.length && input[idx] == '.') { ret.attribs |= NodeAttribs.textNode; idx++; }
 
-	input = input[idx .. $];
+	if (idx+1 < input.length && input[idx .. idx+2] == "!=") {
+		idx += 2;
+		auto l = loc;
+		ret.contents ~= NodeContent.rawInterpolation(ctstrip(skipLine(input, idx, loc)), l);
+		input = input[idx .. $];
+	} else if (idx < input.length && input[idx] == '=') {
+		idx++;
+		auto l = loc;
+		ret.contents ~= NodeContent.interpolation(ctstrip(skipLine(input, idx, loc)), l);
+		input = input[idx .. $];
+	} else {
+		textBlock:
+		if (idx < input.length && input[idx] == '.') { ret.attribs |= NodeAttribs.textNode; idx++; }
 
-	// parse the rest of the line as text contents (if any non-ws)
-	parseTextLine(input, ret, loc);
-	ret.stripLeadingWhitespace();
+		input = input[idx .. $];
+
+		// parse the rest of the line as text contents (if any non-ws)
+		parseTextLine(input, ret, loc);
+		ret.stripLeadingWhitespace();
+	}
+
 	return ret;
 }
 
@@ -282,6 +319,31 @@ private void parseTextLine(ref string input, ref Node dst, ref Location loc)
 	flushText();
 	assert(idx == input.length);
 	input = null;
+}
+
+private string skipLine(ref string input, ref size_t idx, ref Location loc)
+{
+	auto sidx = idx;
+
+	while (idx < input.length) {
+		char cur = input[idx];
+		switch (cur) {
+			default: idx++; break;
+			case '\r':
+				auto ret = input[sidx .. idx];
+				idx++;
+				if (idx < input.length && input[idx] == '\n') idx++;
+				loc.line++;
+				return ret;
+			case '\n':
+				auto ret = input[sidx .. idx];
+				idx++;
+				loc.line++;
+				return ret;
+		}
+	}
+
+	return input[sidx .. $];
 }
 
 private void parseAttributes(ref string input, ref size_t i, ref Node node, in ref Location loc)

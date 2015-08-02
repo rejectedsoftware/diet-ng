@@ -28,7 +28,7 @@ unittest {
 		import std.array : appender;
 		static const n = parseDiet(src);
 		auto __output = appender!string();
-		pragma(msg, getHTMLMixin(n));
+		//pragma(msg, getHTMLMixin(n));
 		mixin(getHTMLMixin(n));
 		assert(__output.data == expected, __output.data);
 	}
@@ -37,6 +37,8 @@ unittest {
 	test!"doctype X\nfoo(test=true)"("<!DOCTYPE X><foo test=\"test\"></foo>");
 	test!"foo(test=2+3)"("<foo test=\"5\"></foo>");
 	test!"foo(test='#{2+3}')"("<foo test=\"5\"></foo>");
+	test!"foo #{2+3}"("<foo>5</foo>");
+	test!"foo= 2+3"("<foo>5</foo>");
 }
 
 private string getHTMLMixin(ref CTX ctx, in Node node, string range_name = defaultOutputRangeName)
