@@ -12,7 +12,7 @@ InputFile[] collectInputFiles(string diet_file)()
 	assert(false);
 }
 
-Node parseDiet(string text, string filename = "string")
+Node[] parseDiet(string text, string filename = "string")
 {
 	InputFile[1] f;
 	f[0].name = filename;
@@ -20,7 +20,7 @@ Node parseDiet(string text, string filename = "string")
 	return parseDiet(f);
 }
 
-Node parseDiet(InputFile[] files)
+Node[] parseDiet(InputFile[] files)
 {
 	return parseDiet(files, 0);
 }
@@ -31,67 +31,67 @@ unittest { // test basic functionality
 	Location ln(int l) { return Location("string", l); }
 
 	// simple node
-	assert(parseDiet("test").contents == [
-		NodeContent.tag(new Node(ln(0), "test"))
+	assert(parseDiet("test") == [
+		new Node(ln(0), "test")
 	]);
 
 	// nested nodes
-	assert(parseDiet("foo\n  bar").contents == [
-		NodeContent.tag(new Node(ln(0), "foo", null, [
+	assert(parseDiet("foo\n  bar") == [
+		new Node(ln(0), "foo", null, [
 			NodeContent.tag(new Node(ln(1), "bar"))
-		]))
+		])
 	]);
 
 	// node with id and classes
-	assert(parseDiet("test#id.cls1.cls2").contents == [
-		NodeContent.tag(new Node(ln(0), "test", [
+	assert(parseDiet("test#id.cls1.cls2") == [
+		new Node(ln(0), "test", [
 			Attribute("id", null, [AttributeContent.text("id")]),
 			Attribute("class", null, [AttributeContent.text("cls1")]),
 			Attribute("class", null, [AttributeContent.text("cls2")])
-		]))
+		])
 	]);
 
 	// node with attributes
-	assert(parseDiet("test(foo1=\"bar\", foo2=\"baz\")").contents == [
-		NodeContent.tag(new Node(ln(0), "test", [
+	assert(parseDiet("test(foo1=\"bar\", foo2=\"baz\")") == [
+		new Node(ln(0), "test", [
 			Attribute("foo1", null, [AttributeContent.text("bar")]),
 			Attribute("foo2", null, [AttributeContent.text("baz")])
-		]))
+		])
 	]);
 
 	// node with pure text contents
-	assert(parseDiet("foo.\n  hello\n      world").contents == [
-		NodeContent.tag(new Node(ln(0), "foo", null, [
+	assert(parseDiet("foo.\n  hello\n      world") == [
+		new Node(ln(0), "foo", null, [
 			NodeContent.text("hello\n", ln(1)),
 			NodeContent.text("    world", ln(2))
-		], NodeAttribs.textNode))
-	], text(parseDiet("foo.\n  hello\n      world").contents));
+		], NodeAttribs.textNode)
+	]);
 
 	// translated text
-	assert(parseDiet("foo& test").contents == [
-		NodeContent.tag(new Node(ln(0), "foo", null, [
+	assert(parseDiet("foo& test") == [
+		new Node(ln(0), "foo", null, [
 			NodeContent.text("test", ln(0))
-		], NodeAttribs.translated))
+		], NodeAttribs.translated)
 	]);
 
 	// interpolated text
-	assert(parseDiet("foo hello #{\"world\"} bar").contents == [
-		NodeContent.tag(new Node(ln(0), "foo", null, [
+	assert(parseDiet("foo hello #{\"world\"} bar") == [
+		new Node(ln(0), "foo", null, [
 			NodeContent.text("hello ", ln(0)),
 			NodeContent.interpolation(`"world"`, ln(0)),
 			NodeContent.text(" bar", ln(0))
-		]))
+		])
 	]);
 
 	// interpolated text
-	assert(parseDiet("foo(att='hello #{\"world\"} bar')").contents == [
-		NodeContent.tag(new Node(ln(0), "foo", [
+	assert(parseDiet("foo(att='hello #{\"world\"} bar')") == [
+		new Node(ln(0), "foo", [
 			Attribute("att", null, [
 				AttributeContent.text("hello "),
 				AttributeContent.interpolation(`"world"`),
 				AttributeContent.text(" bar")
 			])
-		]))
+		])
 	]);
 }
 
@@ -118,7 +118,7 @@ unittest { // test expected errors
 
 unittest { // test CTFE-ability
 	static const result = parseDiet("foo#id.cls(att=\"val\", att2=1+3, att3='test#{4}it')\n\tbar");
-	static assert(result.contents.length == 1);
+	static assert(result.length == 1);
 }
 
 string generate(ALIASES...)(Node node)
@@ -134,15 +134,15 @@ struct InputFile {
 
 alias DietParserException = Exception;
 
-private Node parseDiet(InputFile[] files, size_t file_index)
+private Node[] parseDiet(InputFile[] files, size_t file_index)
 {
 	string indent_style;
 	auto loc = Location(files[file_index].name, 0);
 	int prevlevel = -1;
 	string input = files[0].contents;
+	Node[] ret;
 	Node[] stack;
 	stack.length = 8;
-	stack[0] = new Node;
 
 	while (input.length) {
 		// skip whitespace at the beginning of the line
@@ -163,9 +163,9 @@ private Node parseDiet(InputFile[] files, size_t file_index)
 		if (indent_style.length) {
 			while (indent.startsWith(indent_style)) {
 				if (level > prevlevel) {
-					enforcep((stack[prevlevel+1].attribs & NodeAttribs.textNode) != 0,
+					enforcep((stack[prevlevel].attribs & NodeAttribs.textNode) != 0,
 						"Line skips an indentation level.", loc);
-					stack[prevlevel+1].addText(indent, loc);
+					stack[prevlevel].addText(indent, loc);
 					indent = null;
 					break;
 				}
@@ -175,24 +175,25 @@ private Node parseDiet(InputFile[] files, size_t file_index)
 		}
 		enforcep(indent.length == 0, "Mismatched indentation style.", loc);
 
-		if (level > prevlevel && (stack[prevlevel+1].attribs & NodeAttribs.textNode)) {
+		if (level > prevlevel && prevlevel >= 0 && (stack[prevlevel].attribs & NodeAttribs.textNode)) {
 			// read the whole line as text if the parent node is a pure text node ("." suffix)
-			if (indent.length) stack[prevlevel+1].addText(indent, loc);
-			parseTextLine(input, stack[prevlevel+1], loc);
+			if (indent.length) stack[prevlevel].addText(indent, loc);
+			parseTextLine(input, stack[prevlevel], loc);
 		} else {
 			// parse the line and write it to the stack
-			if (stack.length < level+2) stack.length = level+2;
-			stack[level+1] = parseTagLine(input, loc);
+			if (stack.length < level+1) stack.length = level+1;
+			stack[level] = parseTagLine(input, loc);
 
 			// add it to its parent contents
-			stack[prevlevel+1].contents ~= NodeContent.tag(stack[level+1]);
+			if (level > 0) stack[level-1].contents ~= NodeContent.tag(stack[level]);
+			else ret ~= stack[0];
 
 			// remember the nesting level for the next line
 			prevlevel = level;
 		}
 	}
 
-	return stack[0];
+	return ret;
 }
 
 private Node parseTagLine(ref string input, ref Location loc)
