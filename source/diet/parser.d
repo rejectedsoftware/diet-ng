@@ -1,8 +1,28 @@
+/**
+	Generic Diet format parser.
+
+	Performs generic parsing of a Diet template file. The resulting AST is
+	agnostic to the output format context in which it is used. Format
+	specific constructs, such as inline code or special tags, are parsed
+	as-is without any preprocessing.
+
+	The supported features of the are:
+	$(UL
+		$(LI string interpolations)
+		$(LI assignment expressions)
+		$(LI blocks/extensions)
+		$(LI includes)
+		$(LI text paragraphs)
+		$(LI translation annotations)
+		$(LI class and ID attribute shortcuts)
+	)
+*/
 module diet.parser;
 
 import diet.dom;
 import diet.exception;
 import diet.internal.string;
+import diet.input;
 
 import std.algorithm.searching : startsWith;
 import std.range.primitives : empty, front, popFront, popFrontN;
@@ -117,6 +137,14 @@ unittest { // test basic functionality
 			])
 		])
 	]);
+
+	// special nodes
+	assert(parseDiet("//comment\n//-hide\n!!! 5\n<inline>") == [
+		new Node(ln(0), "//", [], [NodeContent.text("comment", ln(0))]),
+		new Node(ln(1), "//-", [], [NodeContent.text("hide", ln(1))]),
+		new Node(ln(2), "doctype", [], [NodeContent.text("5", ln(2))]),
+		new Node(ln(3), "|", [], [NodeContent.text("<inline>", ln(3))])
+	]);
 }
 
 unittest { // test expected errors
@@ -143,12 +171,6 @@ unittest { // test expected errors
 unittest { // test CTFE-ability
 	static const result = parseDiet("foo#id.cls(att=\"val\", att2=1+3, att3='test#{4}it')\n\tbar");
 	static assert(result.length == 1);
-}
-
-struct InputFile {
-	string name;
-	int mode = 0; // -1: prepend, 0: replace, 1: append
-	string contents;
 }
 
 private Node[] parseDiet(InputFile[] files, size_t file_index)
@@ -192,22 +214,44 @@ private Node[] parseDiet(InputFile[] files, size_t file_index)
 		}
 		enforcep(indent.length == 0, "Mismatched indentation style.", loc);
 
-		if (level > prevlevel && prevlevel >= 0 && (stack[prevlevel].attribs & NodeAttribs.textNode)) {
-			// read the whole line as text if the parent node is a pure text node ("." suffix)
-			if (indent.length) stack[prevlevel].addText(indent, loc);
-			parseTextLine(input, stack[prevlevel], loc);
-		} else {
-			// parse the line and write it to the stack
-			if (stack.length < level+1) stack.length = level+1;
-			stack[level] = parseTagLine(input, loc);
-
-			// add it to its parent contents
-			if (level > 0) stack[level-1].contents ~= NodeContent.tag(stack[level]);
-			else ret ~= stack[0];
-
-			// remember the nesting level for the next line
-			prevlevel = level;
+		// read the whole line as text if the parent node is a pure text node
+		// ("." suffix) or pure raw text node (e.g. comments)
+		if (level > prevlevel && prevlevel >= 0) {
+			if (stack[prevlevel].attribs & NodeAttribs.textNode) {
+				if (indent.length) stack[prevlevel].addText(indent, loc);
+				parseTextLine(input, stack[prevlevel], loc);
+				continue;
+			} else if (stack[prevlevel].attribs & NodeAttribs.rawTextNode) {
+				if (indent.length) stack[prevlevel].addText(indent, loc);
+				auto tmploc = loc;
+				stack[prevlevel].addText(skipLine(input, loc), tmploc);
+				continue;
+			}
 		}
+
+		// parse the line and write it to the stack
+		if (stack.length < level+1) stack.length = level+1;
+
+		if (input.startsWith("//")) {
+			// comments
+			auto n = new Node;
+			if (input[2 .. $].startsWith("-")) { n.name = "//-"; input = input[3 .. $]; }
+			else { n.name = "//"; input = input[2 .. $]; }
+			n.attribs |= NodeAttribs.rawTextNode;
+			auto tmploc = loc;
+			n.addText(skipLine(input, loc), tmploc);
+			stack[level] = n;
+		} else {
+			// normal tag line
+			stack[level] = parseTagLine(input, loc);
+		}
+
+		// add it to its parent contents
+		if (level > 0) stack[level-1].contents ~= NodeContent.tag(stack[level]);
+		else ret ~= stack[0];
+
+		// remember the nesting level for the next line
+		prevlevel = level;
 	}
 
 	return ret;
@@ -221,26 +265,40 @@ private Node parseTagLine(ref string input, ref Location loc)
 
 	auto ret = new Node;
 	ret.loc = loc;
-	ret.name = skipIdent(input, idx, ":-_", loc);
 
-	if (idx < input.length && input[idx] == '#') {
-		idx++;
-		auto value = skipIdent(input, idx, "-_", loc);
-		enforcep(value.length > 0, "Expected id.", loc);
-		ret.attributes ~= Attribute("id", [AttributeContent(AttributeContent.Kind.text, value)]);
+	if (input.startsWith("!!! ")) { // legacy doctype support
+		input = input[4 .. $];
+		ret.name = "doctype";
+	} else if (input.startsWith("|")) { // text line
+		input = input[1 .. $];
+		ret.name = "|";
+	} else if (input.startsWith("<")) { // inline HTML/XML
+		ret.name = "|";
+	} else ret.name = skipIdent(input, idx, ":-_", loc);
+
+	if (ret.name != "|") {
+		// node ID
+		if (idx < input.length && input[idx] == '#') {
+			idx++;
+			auto value = skipIdent(input, idx, "-_", loc);
+			enforcep(value.length > 0, "Expected id.", loc);
+			ret.attributes ~= Attribute("id", [AttributeContent(AttributeContent.Kind.text, value)]);
+		}
+
+		// node classes
+		while (idx < input.length && input[idx] == '.') {
+			if (idx+1 >= input.length || input[idx+1].isWhite)
+				goto textBlock;
+			idx++;
+			auto value = skipIdent(input, idx, "-_", loc);
+			enforcep(value.length > 0, "Expected class name identifier.", loc);
+			ret.attributes ~= Attribute("class", [AttributeContent(AttributeContent.Kind.text, value)]);
+		}
+
+		// generic attributes
+		if (idx < input.length && input[idx] == '(')
+			parseAttributes(input, idx, ret, loc);
 	}
-
-	while (idx < input.length && input[idx] == '.') {
-		if (idx+1 >= input.length || input[idx+1].isWhite)
-			goto textBlock;
-		idx++;
-		auto value = skipIdent(input, idx, "-_", loc);
-		enforcep(value.length > 0, "Expected class name identifier.", loc);
-		ret.attributes ~= Attribute("class", [AttributeContent(AttributeContent.Kind.text, value)]);
-	}
-
-	if (idx < input.length && input[idx] == '(')
-		parseAttributes(input, idx, ret, loc);
 
 	if (idx < input.length && input[idx] == '&') { ret.attribs |= NodeAttribs.translated; idx++; }
 
@@ -344,6 +402,14 @@ private string skipLine(ref string input, ref size_t idx, ref Location loc)
 	}
 
 	return input[sidx .. $];
+}
+
+private string skipLine(ref string input, ref Location loc)
+{
+	size_t idx = 0;
+	auto ret = skipLine(input, idx, loc);
+	input = input[idx .. $];
+	return ret;
 }
 
 private void parseAttributes(ref string input, ref size_t i, ref Node node, in ref Location loc)

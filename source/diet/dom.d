@@ -66,8 +66,9 @@ class Node {
 
 enum NodeAttribs {
 	none = 0,
-	translated = 1<<0, /// Translate node contents
-	textNode = 1<<1    /// 
+	translated = 1<<0,  /// Translate node contents
+	textNode = 1<<1,    /// All nested lines are treated as text
+	rawTextNode = 1<<2, /// All nested lines are treated as raw text (no interpolations or inline tags)
 }
 
 struct Attribute {
