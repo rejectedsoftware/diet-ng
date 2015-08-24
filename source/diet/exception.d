@@ -7,8 +7,8 @@ alias DietParserException = Exception;
 package void enforcep(bool cond, lazy string text, in ref Location loc)
 {
 	if (__ctfe) {
-		import std.string : format;
-		assert(cond, format("%s(%s): %s", loc.file, loc.line+1, text));
+		import std.conv : to;
+		assert(cond, loc.file~"("~(loc.line+1).to!string~"): "~text);
 	} else {
 		if (!cond) throw new DietParserException(text, loc.file, loc.line+1);
 	}
