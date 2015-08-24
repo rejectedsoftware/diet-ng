@@ -43,7 +43,7 @@ Node[] parseDiet(string text, string filename = "string")
 
 Node[] parseDiet(InputFile[] files)
 {
-	return parseDiet(files, 0);
+	return parseDietWithExtensions(files, 0, null);
 }
 
 unittest { // test basic functionality
@@ -177,8 +177,8 @@ unittest { // test expected errors
 unittest { // includes
 	Node[] parse(string diet) {
 		auto files = [
-			InputFile("main.dt", 0, diet),
-			InputFile("inc.dt", 0, "p")
+			InputFile("main.dt", diet),
+			InputFile("inc.dt", "p")
 		];
 		return parseDiet(files);
 	}
@@ -203,22 +203,126 @@ unittest { // includes
 	testFail("p\ninclude inc\n\tp", "Includes cannot have children.");
 }
 
+unittest { // extensions
+	Node[] parse(string diet) {
+		auto files = [
+			InputFile("main.dt", diet),
+			InputFile("root.dt", "html\n\tblock a\n\tblock b"),
+			InputFile("intermediate.dt", "extends root\nblock a\n\tp"),
+		];
+		return parseDiet(files);
+	}
+
+	void testFail(string diet, string msg)
+	{
+		try {
+			parse(diet);
+			assert(false, "Expected exception was not thrown");
+		} catch (DietParserException ex) {
+			assert(ex.msg == msg, "Unexpected error message: "~ex.msg);
+		}
+	}
+
+	assert(parse("extends root") == [
+		new Node(Location("root.dt", 0), "html", null, null)
+	]);
+	assert(parse("extends root\nblock a\n\tdiv\nblock b\n\tpre") == [
+		new Node(Location("root.dt", 0), "html", null, [
+			NodeContent.tag(new Node(Location("main.dt", 2), "div", null, null)),
+			NodeContent.tag(new Node(Location("main.dt", 4), "pre", null, null))
+		])
+	]);
+	assert(parse("extends intermediate\nblock b\n\tpre") == [
+		new Node(Location("root.dt", 0), "html", null, [
+			NodeContent.tag(new Node(Location("intermediate.dt", 2), "p", null, null)),
+			NodeContent.tag(new Node(Location("main.dt", 2), "pre", null, null))
+		])
+	]);
+	assert(parse("extends intermediate\nblock a\n\tpre") == [
+		new Node(Location("root.dt", 0), "html", null, [
+			NodeContent.tag(new Node(Location("main.dt", 2), "pre", null, null))
+		])
+	]);
+	assert(parse("extends intermediate\nappend a\n\tpre") == [
+		new Node(Location("root.dt", 0), "html", null, [
+			NodeContent.tag(new Node(Location("intermediate.dt", 2), "p", null, null)),
+			NodeContent.tag(new Node(Location("main.dt", 2), "pre", null, null))
+		])
+	]);
+	assert(parse("extends intermediate\nprepend a\n\tpre") == [
+		new Node(Location("root.dt", 0), "html", null, [
+			NodeContent.tag(new Node(Location("main.dt", 2), "pre", null, null)),
+			NodeContent.tag(new Node(Location("intermediate.dt", 2), "p", null, null))
+		])
+	]);
+}
+
 unittest { // test CTFE-ability
 	static const result = parseDiet("foo#id.cls(att=\"val\", att2=1+3, att3='test#{4}it')\n\tbar");
 	static assert(result.length == 1);
 }
 
-private Node[] parseDiet(InputFile[] files, size_t file_index)
+private Node[] parseDietWithExtensions(InputFile[] files, size_t file_index, BlockInfo[string] blocks)
+{
+	import std.algorithm : countUntil, filter, map;
+	import std.array : array;
+	import std.path : stripExtension;
+
+	auto nodes = parseDiet(files, file_index, blocks);
+	if (nodes[0].name != "extends") return nodes;
+
+	// extract base template name/index
+	enforcep(nodes[0].isTextNode, "'extends' cannot contain children or interpolations.", nodes[0].loc);
+	string base_template = nodes[0].contents[0].value.ctstrip;
+	auto base_idx = files.countUntil!(f => f.name.stripExtension == base_template);
+	assert(base_idx >= 0, "Missing base template: "~base_template);
+
+	// collect all blocks
+	foreach (n; nodes[1 .. $]) {
+		int mode;
+		switch (n.name) {
+			default: 
+				enforcep(false, "Extension templates may only contain blocks definitions at the root level.", n.loc);
+				break;
+			case "block": mode = 0; break;
+			case "prepend": mode = -1; break;
+			case "append": mode = 1; break;
+		}
+		enforcep(n.contents.length > 0 && n.contents[0].kind == NodeContent.Kind.text,
+			"'block' must have a name.", n.loc);
+		auto name = n.contents[0].value.ctstrip;
+		auto contents = n.contents[1 .. $].filter!(n => n.kind == NodeContent.Kind.node).map!(n => n.node).array;
+		if (auto pb = name in blocks) {
+			if (pb.mode == -1) pb.contents = pb.contents ~ contents;
+			else if (pb.mode == 1) pb.contents = contents ~ pb.contents;
+			else continue;
+			pb.mode = mode;
+		} else blocks[name] = BlockInfo(mode, contents);
+	}
+
+	// parse base template
+	return parseDietWithExtensions(files, base_idx, blocks);
+}
+
+private struct BlockInfo {
+	int mode = 0; // -1: prepend, 0: replace, 1: append
+	Node[] contents;
+}
+
+private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string] blocks)
 {
 	string indent_style;
 	auto loc = Location(files[file_index].name, 0);
 	int prevlevel = -1;
+	int skiplevel = int.max;
 	string input = files[file_index].contents;
 	Node[] ret;
 	Node[] stack;
 	stack.length = 8;
 	bool prev_was_include = false;
+	bool is_extension = false;
 
+	next_line:
 	while (input.length) {
 		// skip whitespace at the beginning of the line
 		string indent = input.skipIndent();
@@ -228,11 +332,6 @@ private Node[] parseDiet(InputFile[] files, size_t file_index)
 		if (input[0] == '\r') { input.popFrontN(input.length >= 2 && input[1] == '\n' ? 2 : 1); loc.line++; continue; }
 
 		enforcep(prevlevel >= 0 || indent.length == 0, prev_was_include ? "Includes cannot have children." : "First node must not be indented.", loc);
-
-		// blocks/extensions
-		if (prevlevel < -1 && input.startsWith("extends ")) {
-			assert(false, "Extensions not yet supported.");
-		}
 
 		// determine the indentation style (tabs/spaces) from the first indented
 		// line of the file
@@ -252,9 +351,14 @@ private Node[] parseDiet(InputFile[] files, size_t file_index)
 				}
 				level++;
 				indent = indent[indent_style.length .. $];
+				if (level > skiplevel) {
+					skipLine(input, loc);
+					continue next_line;
+				}
 			}
 		}
 		enforcep(indent.length == 0, "Mismatched indentation style.", loc);
+		skiplevel = int.max; // reset skiplevel once a non-skipped node was encountered
 
 		// read the whole line as text if the parent node is a pure text node
 		// ("." suffix) or pure raw text node (e.g. comments)
@@ -275,7 +379,8 @@ private Node[] parseDiet(InputFile[] files, size_t file_index)
 			}
 		}
 
-		// parse the line and write it to the stack
+		// parse the line and write it to the stack:
+
 		if (stack.length < level+1) stack.length = level+1;
 
 		if (input.startsWith("include ")) {
@@ -300,16 +405,41 @@ private Node[] parseDiet(InputFile[] files, size_t file_index)
 				enforcep(fi != size_t.max, "Missing include input file: "~name, loc);
 				enforcep(fi != file_index, "Recursive include.", loc);
 			
-				incnodes = parseDiet(files, fi);
+				incnodes = parseDiet(files, fi, blocks);
 			}
 
 			if (level == 0) ret ~= incnodes;
 			else foreach (n; incnodes) stack[level-1].contents ~= NodeContent.tag(n);
 			prevlevel = level-1;
 			continue;
-		}
+		} else prev_was_include = false;
 
-		prev_was_include = false;
+		if (input.startsWith("block ") && !is_extension) {
+			input = input[6 .. $];
+
+			auto tmploc = loc;
+			auto name = skipLine(input, tmploc).ctstrip;
+			int mode = -1;
+
+			if (auto pb = name in blocks) {
+				mode = pb.mode;
+				if (pb.mode <= 0) {
+					import std.algorithm : map;
+					import std.array : array;
+					if (level == 0) ret ~= pb.contents;
+					else stack[level-1].contents ~= pb.contents.map!(n => NodeContent.tag(n)).array;
+				}
+
+				assert(pb.mode <= 0, "Prepend block mode not yet supported.");
+			}
+
+			if (mode != 0) {
+				// append children of 'block' to its parent
+				stack[level] = stack[level-1];
+			} else skiplevel = level;
+			prevlevel = level;
+			continue;
+		}
 
 		if (input.startsWith("//")) {
 			// comments
@@ -324,6 +454,10 @@ private Node[] parseDiet(InputFile[] files, size_t file_index)
 		} else {
 			// normal tag line
 			stack[level] = parseTagLine(input, loc);
+
+			// test if first node is an "extends" node
+			if (prevlevel < 0 && stack[level].name == "extends")
+				is_extension = true;
 		}
 
 		// add it to its parent contents

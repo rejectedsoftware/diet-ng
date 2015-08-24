@@ -374,11 +374,11 @@ unittest { // blocks and extensions
 	}
 
 	assert(compilePair!("extends base\nblock test\n\tp Hello", "body\n\tblock test")
-		 == "<body>\n\t<p>Hello</p>\n</body>");
+		 == "<body><p>Hello</p></body>");
 	assert(compilePair!("extends base\nblock test\n\tp Hello", "body\n\tblock test\n\t\tp Default")
-		 == "<body>\n\t<p>Hello</p>\n</body>", compilePair!("extends base\nblock test\n\tp Hello", "body\n\tblock test\n\t\tp Default"));
+		 == "<body><p>Hello</p></body>");
 	assert(compilePair!("extends base", "body\n\tblock test\n\t\tp Default")
-		 == "<body>\n\t<p>Default</p>\n</body>");
+		 == "<body><p>Default</p></body>");
 	assert(compilePair!("extends base\nprepend test\n\tp Hello", "body\n\tblock test\n\t\tp Default")
-		 == "<body>\n\t<p>Hello</p>\n\t<p>Default</p>\n</body>");
+		 == "<body><p>Hello</p><p>Default</p></body>");
 }

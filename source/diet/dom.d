@@ -52,6 +52,8 @@ class Node {
 		}
 	}
 
+	bool isTextNode() const { return contents.length == 1 && contents[0].kind == NodeContent.Kind.text; }
+
 	override string toString() const {
 		import std.string : format;
 		return format("Node(%s, %s, %s, %s, %s)", this.tupleof);
