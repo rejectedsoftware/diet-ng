@@ -24,7 +24,7 @@ import diet.exception;
 import diet.internal.string;
 import diet.input;
 
-import std.algorithm.searching : startsWith;
+import std.algorithm.searching : endsWith, startsWith;
 import std.range.primitives : empty, front, popFront, popFrontN;
 
 
@@ -83,8 +83,8 @@ unittest { // test basic functionality
 	// node with pure text contents
 	assert(parseDiet("foo.\n  hello\n      world") == [
 		new Node(ln(0), "foo", null, [
-			NodeContent.text("hello\n", ln(1)),
-			NodeContent.text("    world", ln(2))
+			NodeContent.text("hello", ln(1)),
+			NodeContent.text("\n    world", ln(2))
 		], NodeAttribs.textNode)
 	]);
 
@@ -139,11 +139,17 @@ unittest { // test basic functionality
 	]);
 
 	// special nodes
-	assert(parseDiet("//comment\n//-hide\n!!! 5\n<inline>") == [
-		new Node(ln(0), "//", [], [NodeContent.text("comment", ln(0))]),
-		new Node(ln(1), "//-", [], [NodeContent.text("hide", ln(1))]),
-		new Node(ln(2), "doctype", [], [NodeContent.text("5", ln(2))]),
-		new Node(ln(3), "|", [], [NodeContent.text("<inline>", ln(3))])
+	assert(parseDiet("//comment") == [
+		new Node(ln(0), "//", null, [NodeContent.text("comment", ln(0))], NodeAttribs.rawTextNode)
+	], text(parseDiet("//comment")));
+	assert(parseDiet("//-hide") == [
+		new Node(ln(0), "//-", null, [NodeContent.text("hide", ln(0))], NodeAttribs.rawTextNode)
+	]);
+	assert(parseDiet("!!! 5") == [
+		new Node(ln(0), "doctype", null, [NodeContent.text("5", ln(0))])
+	]);
+	assert(parseDiet("<inline>") == [
+		new Node(ln(0), "|", null, [NodeContent.text("<inline>", ln(0))])
 	]);
 }
 
@@ -159,13 +165,42 @@ unittest { // test expected errors
 	testFail("+test", "Expected identifier but got '+'.");
 	testFail("  test", "First node must not be indented.");
 	testFail("test\n  test\n\ttest", "Mismatched indentation style.");
-	testFail("test\n\ttest\n\t\t\ttest", "Line skips an indentation level.");
+	testFail("test\n\ttest\n\t\t\ttest", "Line is indented too deeply.");
 	testFail("test#", "Expected identifier but got nothing.");
 	testFail("test.()", "Expected identifier but got '('.");
 	testFail("test #.", "Expected '{' following '#'.");
 	testFail("test !.", "Expected '{' following '!'.");
 	testFail("test ##", "Use '\\#' instead of '##' for escaping.");
 	testFail("test !!", "Use '\\!' instead of '!!' for escaping.");
+}
+
+unittest { // includes
+	Node[] parse(string diet) {
+		auto files = [
+			InputFile("main.dt", 0, diet),
+			InputFile("inc.dt", 0, "p")
+		];
+		return parseDiet(files);
+	}
+
+	void testFail(string diet, string msg)
+	{
+		try {
+			parse(diet);
+			assert(false, "Expected exception was not thrown");
+		} catch (DietParserException ex) {
+			assert(ex.msg == msg, "Unexpected error message: "~ex.msg);
+		}
+	}
+
+	assert(parse("include inc") == [
+		new Node(Location("inc.dt", 0), "p", null, null)
+	]);
+	testFail("include main", "Recursive include.");
+	testFail("include inc2", "Missing include input file: inc2");
+	testFail("include #{p}", "Dynamic includes are not supported.");
+	testFail("include inc\n\tp", "Includes cannot have children.");
+	testFail("p\ninclude inc\n\tp", "Includes cannot have children.");
 }
 
 unittest { // test CTFE-ability
@@ -178,10 +213,11 @@ private Node[] parseDiet(InputFile[] files, size_t file_index)
 	string indent_style;
 	auto loc = Location(files[file_index].name, 0);
 	int prevlevel = -1;
-	string input = files[0].contents;
+	string input = files[file_index].contents;
 	Node[] ret;
 	Node[] stack;
 	stack.length = 8;
+	bool prev_was_include = false;
 
 	while (input.length) {
 		// skip whitespace at the beginning of the line
@@ -191,7 +227,12 @@ private Node[] parseDiet(InputFile[] files, size_t file_index)
 		if (input.length == 0 || input[0] == '\n') { input.popFront(); loc.line++; continue; }
 		if (input[0] == '\r') { input.popFrontN(input.length >= 2 && input[1] == '\n' ? 2 : 1); loc.line++; continue; }
 
-		enforcep(prevlevel >= 0 || indent.length == 0, "First node must not be indented.", loc);
+		enforcep(prevlevel >= 0 || indent.length == 0, prev_was_include ? "Includes cannot have children." : "First node must not be indented.", loc);
+
+		// blocks/extensions
+		if (prevlevel < -1 && input.startsWith("extends ")) {
+			assert(false, "Extensions not yet supported.");
+		}
 
 		// determine the indentation style (tabs/spaces) from the first indented
 		// line of the file
@@ -199,12 +240,13 @@ private Node[] parseDiet(InputFile[] files, size_t file_index)
 
 		// determine nesting level
 		int level = 0;
+		string textindent;
 		if (indent_style.length) {
 			while (indent.startsWith(indent_style)) {
 				if (level > prevlevel) {
-					enforcep((stack[prevlevel].attribs & NodeAttribs.textNode) != 0,
-						"Line skips an indentation level.", loc);
-					stack[prevlevel].addText(indent, loc);
+					enforcep((stack[prevlevel].attribs & (NodeAttribs.textNode|NodeAttribs.rawTextNode)) != 0,
+						prev_was_include ? "Includes cannot have children." : "Line is indented too deeply.", loc);
+					textindent = indent;
 					indent = null;
 					break;
 				}
@@ -218,11 +260,15 @@ private Node[] parseDiet(InputFile[] files, size_t file_index)
 		// ("." suffix) or pure raw text node (e.g. comments)
 		if (level > prevlevel && prevlevel >= 0) {
 			if (stack[prevlevel].attribs & NodeAttribs.textNode) {
-				if (indent.length) stack[prevlevel].addText(indent, loc);
+				if (!stack[prevlevel].contents.empty)
+					stack[prevlevel].addText("\n", loc);
+				if (textindent.length) stack[prevlevel].addText(textindent, loc);
 				parseTextLine(input, stack[prevlevel], loc);
 				continue;
 			} else if (stack[prevlevel].attribs & NodeAttribs.rawTextNode) {
-				if (indent.length) stack[prevlevel].addText(indent, loc);
+				if (!stack[prevlevel].contents.empty)
+					stack[prevlevel].addText("\n", loc);
+				if (textindent.length) stack[prevlevel].addText(textindent, loc);
 				auto tmploc = loc;
 				stack[prevlevel].addText(skipLine(input, loc), tmploc);
 				continue;
@@ -232,9 +278,43 @@ private Node[] parseDiet(InputFile[] files, size_t file_index)
 		// parse the line and write it to the stack
 		if (stack.length < level+1) stack.length = level+1;
 
+		if (input.startsWith("include ")) {
+			prev_was_include = true;
+			input = input[8 .. $];
+
+			auto tmploc = loc;
+			auto name = skipLine(input, tmploc).ctstrip;
+			Node[] incnodes;
+
+			if (name.startsWith("#{")) {
+				enforcep(false, "Dynamic includes are not supported.", tmploc);
+			} else {
+				import std.path : stripExtension;
+				// file include
+				size_t fi = size_t.max;
+				foreach (i, ref f; files)
+					if (f.name.stripExtension == name) {
+						fi = i;
+						break;
+					}
+				enforcep(fi != size_t.max, "Missing include input file: "~name, loc);
+				enforcep(fi != file_index, "Recursive include.", loc);
+			
+				incnodes = parseDiet(files, fi);
+			}
+
+			if (level == 0) ret ~= incnodes;
+			else foreach (n; incnodes) stack[level-1].contents ~= NodeContent.tag(n);
+			prevlevel = level-1;
+			continue;
+		}
+
+		prev_was_include = false;
+
 		if (input.startsWith("//")) {
 			// comments
 			auto n = new Node;
+			n.loc = loc;
 			if (input[2 .. $].startsWith("-")) { n.name = "//-"; input = input[3 .. $]; }
 			else { n.name = "//"; input = input[2 .. $]; }
 			n.attribs |= NodeAttribs.rawTextNode;
@@ -267,7 +347,7 @@ private Node parseTagLine(ref string input, ref Location loc)
 	ret.loc = loc;
 
 	if (input.startsWith("!!! ")) { // legacy doctype support
-		input = input[4 .. $];
+		input = input[3 .. $];
 		ret.name = "doctype";
 	} else if (input.startsWith("|")) { // text line
 		input = input[1 .. $];
@@ -312,10 +392,13 @@ private Node parseTagLine(ref string input, ref Location loc)
 		auto l = loc;
 		ret.contents ~= NodeContent.interpolation(ctstrip(skipLine(input, idx, loc)), l);
 		input = input[idx .. $];
-	} else {
+	} else if (idx < input.length && input[idx] == '.') {
 		textBlock:
-		if (idx < input.length && input[idx] == '.') { ret.attribs |= NodeAttribs.textNode; idx++; }
-
+		ret.attribs |= NodeAttribs.textNode;
+		idx++;
+		skipLine(input, idx, loc); // ignore the rest of the line
+		input = input[idx .. $];
+	} else {
 		input = input[idx .. $];
 
 		// parse the rest of the line as text contents (if any non-ws)
@@ -359,15 +442,15 @@ private void parseTextLine(ref string input, ref Node dst, ref Location loc)
 				sidx = idx;
 				break;
 			case '\r':
+				flushText();
 				idx++;
 				if (idx < input.length && input[idx] == '\n') idx++;
-				flushText();
 				input = input[idx .. $];
 				loc.line++;
 				return;
 			case '\n':
-				idx++;
 				flushText();
+				idx++;
 				input = input[idx .. $];
 				loc.line++;
 				return;

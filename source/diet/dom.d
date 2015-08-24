@@ -74,6 +74,25 @@ enum NodeAttribs {
 struct Attribute {
 	string name;
 	AttributeContent[] values;
+
+	@property Attribute dup() const { return Attribute(name, values.dup); }
+
+	void addText(string str)
+	{
+		if (values.length && values[$-1].kind == AttributeContent.Kind.text)
+			values[$-1].value ~= str;
+		else
+			values ~= AttributeContent.text(str);
+	}
+
+	void addContents(const(AttributeContent)[] contents)
+	{
+		if (contents.length > 0 && contents[0].kind == AttributeContent.Kind.text) {
+			addText(contents[0].value);
+			contents = contents[1 .. $];
+		}
+		values ~= contents;
+	}
 }
 
 struct AttributeContent {
