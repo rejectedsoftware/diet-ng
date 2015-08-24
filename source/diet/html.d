@@ -2,19 +2,39 @@ module diet.html;
 
 import diet.dom;
 import diet.exception;
+import diet.internal.html;
 import diet.internal.string;
+import diet.input;
 
 
-string htmlAttribEscape(string s) { return s; }
-void writeHTMLEscaped(R)(ref R dst, string s) { dst.put(s); }
-void writeHTMLAttribEscaped(R)(ref R dst, string s) { dst.put(s); }
+enum defaultOutputRangeName = "_output_";
 
+template Group(A...) {
+	import std.typetuple;
+	alias expand = TypeTuple!A;
+}
 
-enum defaultOutputRangeName = "__output";
+template compileHTMLDietString(string contents, ALIASES...)
+{
+	void compileHTMLDietString(R)(ref R dst)
+	{
+		compileHTMLDietStrings!(Group!(contents, "diet-string"), ALIASES)(dst);
+	}
+}
+
+template compileHTMLDietStrings(alias FILES_GROUP, ALIASES...)
+{
+	void compileHTMLDietStrings(R)(ref R _output_)
+	{
+		import diet.parser;
+		enum nodes = parseDiet(filesFromGroup!FILES_GROUP);
+		//pragma(msg, getHTMLMixin(nodes));
+		mixin(getHTMLMixin(nodes));
+	}
+}
 
 string getHTMLMixin(in Node[] nodes, string range_name = defaultOutputRangeName)
 {
-	assert(nodes.length > 0, "Cannot render empty Diet file.");
 	CTX ctx;
 	ctx.rangeName = range_name;
 	string ret = "import std.conv : to;\n";
@@ -28,10 +48,10 @@ unittest {
 	void test(string src)(string expected) {
 		import std.array : appender;
 		static const n = parseDiet(src);
-		auto __output = appender!string();
+		auto _output_ = appender!string();
 		//pragma(msg, getHTMLMixin(n));
 		mixin(getHTMLMixin(n));
-		assert(__output.data == expected, __output.data);
+		assert(_output_.data == expected, _output_.data);
 	}
 
 	test!"doctype html\nfoo(test=true)"("<!DOCTYPE html><foo test></foo>");
@@ -48,20 +68,43 @@ private string getHTMLMixin(ref CTX ctx, in Node node)
 {
 	switch (node.name) {
 		default: return ctx.getElementMixin(node);
-		case "doctype", "!!!": return ctx.getDoctypeMixin(node);
+		case "doctype": return ctx.getDoctypeMixin(node);
 		case "-": return ctx.getCodeMixin(node);
-		case "//": // TODO!
+		case "//": return ctx.getCommentMixin(node);
 		case "//-": return null;
+		case "|":
+			string ret;
+			foreach (c; node.contents)
+				ret ~= ctx.getNodeContentsMixin(c);
+			return ret;
+
 	}
 }
 
 private string getElementMixin(ref CTX ctx, in Node node)
 {
+	import std.algorithm : countUntil;
+
 	// write tag name
 	string ret = statement(node.loc, q{%s.put("<%s");}, ctx.rangeName, node.name);
 
+	bool had_class = false;
+
 	// write attributes
-	foreach (att; node.attributes) {
+	foreach (ai, att_; node.attributes) {
+		auto att = att_.dup; // this sucks...
+
+		// merge multiple class attributes into one
+		if (att.name == "class") {
+			if (had_class) continue;
+			had_class = true;
+			foreach (ca; node.attributes[ai+1 .. $]) {
+				if (ca.name != "class") continue;
+				att.addText(" ");
+				att.addContents(ca.values);
+			}
+		}
+
 		bool is_expr = att.values.length == 1 && att.values[0].kind == AttributeContent.Kind.interpolation;
 
 		if (is_expr) {
@@ -76,20 +119,29 @@ private string getElementMixin(ref CTX ctx, in Node node)
 			ret ~= statement(node.loc, q{static if (is(typeof(%s) == bool)) }~'{', expr);
 			if (ctx.isHTML5) ret ~= statement(node.loc, q{if (%s) %s.put(" %s");}, expr, ctx.rangeName, att.name);
 			else ret ~= statement(node.loc, q{if (%s) %s.put(" %s=\"%s\"");}, expr, ctx.rangeName, att.name, att.name);
+			ret ~= statement(node.loc, "} else "~q{static if (is(typeof(%s) : const(char)[])) }~'{', expr);
+			ret ~= statement(node.loc, q{  auto val = %s;}, expr);
+			ret ~= statement(node.loc, q{  if (val !is null) }~'{');
+			ret ~= statement(node.loc, q{    %s.put(" %s=\"");}, ctx.rangeName, att.name);
+			ret ~= statement(node.loc, q{    %s.filterHTMLAttribEscape(val);}, ctx.rangeName);
+			ret ~= rawText(node.loc, ctx.rangeName, "\"");
+			ret ~= statement(node.loc, "  }");
 			ret ~= statement(node.loc, "} else {");
 		}
 
 		ret ~= statement(node.loc, q{%s.put(" %s=\"");}, ctx.rangeName, att.name);
+
 		foreach (i, v; att.values) {
 			final switch (v.kind) with (AttributeContent.Kind) {
 				case text:
 					ret ~= rawText(node.loc, ctx.rangeName, htmlAttribEscape(v.value));
 					break;
 				case interpolation, rawInterpolation:
-					ret ~= statement(node.loc, q{%s.writeHTMLAttribEscaped((%s).to!string);}, ctx.rangeName, v.value);
+					ret ~= statement(node.loc, q{%s.filterHTMLAttribEscape((%s).to!string);}, ctx.rangeName, v.value);
 					break;
 			}
 		}
+
 		ret ~= rawText(node.loc, ctx.rangeName, "\"");
 
 		if (is_expr) ret ~= statement(node.loc, "}");
@@ -97,14 +149,16 @@ private string getElementMixin(ref CTX ctx, in Node node)
 
 	// determine if we need a closing tag or have a singular tag
 	switch (node.name) {
+		default: break;
 		case "area", "base", "basefont", "br", "col", "embed", "frame",	"hr", "img", "input",
 				"keygen", "link", "meta", "param", "source", "track", "wbr":
 			enforcep(!node.contents.length, "Singular HTML element '"~node.name~"' may not have contents.", node.loc);
 			ret ~= rawText(node.loc, ctx.rangeName, "/>");
-		default:
-			ret ~= rawText(node.loc, ctx.rangeName, ">");
-			break;
+			enforcep(node.contents.length == 0, "Singular tag <"~node.name~"> may not have contents.", node.loc);
+			return ret;
 	}
+
+	ret ~= rawText(node.loc, ctx.rangeName, ">");
 
 	// write contents
 	ctx.depth++;
@@ -120,6 +174,7 @@ private string getElementMixin(ref CTX ctx, in Node node)
 
 private string getNodeContentsMixin(ref CTX ctx, in NodeContent c)
 {
+	// TODO: translation!
 	final switch (c.kind) with (NodeContent.Kind) {
 		case node:
 			string ret;
@@ -130,7 +185,7 @@ private string getNodeContentsMixin(ref CTX ctx, in NodeContent c)
 		case text:
 			return rawText(c.loc, ctx.rangeName, c.value);
 		case interpolation:
-			return statement(c.loc, q{%s.writeHTMLEscaped((%s).to!string);}, ctx.rangeName, c.value);
+			return statement(c.loc, q{%s.filterHTMLEscape((%s).to!string);}, ctx.rangeName, c.value);
 		case rawInterpolation:
 			return statement(c.loc, q{%s.put((%s).to!string);}, ctx.rangeName, c.value);
 	}
@@ -212,6 +267,15 @@ private string getCodeMixin(ref CTX ctx, in ref Node node)
 	return ret;
 }
 
+private string getCommentMixin(ref CTX ctx, in ref Node node)
+{
+	string ret = rawText(node.loc, ctx.rangeName, "<!--");
+	foreach (c; node.contents)
+		ret ~= ctx.getNodeContentsMixin(c);
+	ret ~= rawText(node.loc, ctx.rangeName, "-->");
+	return ret;
+}
+
 private pure string statement(ARGS...)(Location loc, string fmt, ARGS args)
 {
 	import std.string : format;
@@ -234,4 +298,87 @@ private struct CTX {
 		if (pretty) return rawText(loc, rangeName, "\n"~"\t".replicate(depth));
 		else return null;
 	}
+}
+
+unittest {
+	static string compile(string diet, ALIASES...)() {
+		import std.array : appender;
+		import std.string : strip;
+		auto dst = appender!string;
+		compileHTMLDietString!(diet, ALIASES)(dst);
+		return strip(cast(string)(dst.data));
+	}
+
+	assert(compile!(`!!! 5`) == `<!DOCTYPE html>`, `_`~compile!(`!!! 5`)~`_`);
+	assert(compile!(`!!! html`) == `<!DOCTYPE html>`);
+	assert(compile!(`doctype html`) == `<!DOCTYPE html>`);
+	assert(compile!(`p= 5`) == `<p>5</p>`);
+	assert(compile!(`script= 5`) == `<script>5</script>`);
+	assert(compile!(`style= 5`) == `<style>5</style>`);
+	//assert(compile!(`include #{"p Hello"}`) == "<p>Hello</p>");
+	assert(compile!(`<p>Hello</p>`) == "<p>Hello</p>");
+	assert(compile!(`// I show up`) == "<!-- I show up-->");
+	assert(compile!(`//-I don't show up`) == "");
+	assert(compile!(`//- I don't show up`) == "");
+
+	// issue 372
+	assert(compile!(`div(class="")`) == `<div></div>`);
+	assert(compile!(`div.foo(class="")`) == `<div class="foo"></div>`);
+	assert(compile!(`div.foo(class="bar")`) == `<div class="foo bar"></div>`);
+	assert(compile!(`div(class="foo")`) == `<div class="foo"></div>`);
+	assert(compile!(`div#foo(class='')`) == `<div id="foo"></div>`);
+
+	// issue 520
+	assert(compile!("- auto cond = true;\ndiv(someattr=cond ? \"foo\" : null)") == "<div someattr=\"foo\"></div>");
+	assert(compile!("- auto cond = false;\ndiv(someattr=cond ? \"foo\" : null)") == "<div></div>");
+	assert(compile!("- auto cond = false;\ndiv(someattr=cond ? true : false)") == "<div></div>");
+	assert(compile!("- auto cond = true;\ndiv(someattr=cond ? true : false)") == "<div someattr=\"someattr\"></div>");
+	assert(compile!("doctype html\n- auto cond = true;\ndiv(someattr=cond ? true : false)")
+		== "<!DOCTYPE html><div someattr></div>");
+	assert(compile!("doctype html\n- auto cond = false;\ndiv(someattr=cond ? true : false)")
+		== "<!DOCTYPE html><div></div>");
+
+	// issue 510
+	assert(compile!("pre.test\n\tfoo") == "<pre class=\"test\"><foo></foo></pre>");
+	assert(compile!("pre.test.\n\tfoo") == "<pre class=\"test\">foo</pre>");
+	assert(compile!("pre.test. foo") == "<pre class=\"test\"></pre>");
+	assert(compile!("pre().\n\tfoo") == "<pre>foo</pre>");
+	assert(compile!("pre#foo.test(data-img=\"sth\",class=\"meh\"). something\n\tmeh") ==
+		   "<pre id=\"foo\" class=\"test meh\" data-img=\"sth\">meh</pre>");
+
+	assert(compile!("input(autofocus)").length);
+
+	assert(compile!("- auto s = \"\";\ninput(type=\"text\",value=\"&\\\"#{s}\")")
+			== `<input type="text" value="&amp;&quot;"/>`);
+	assert(compile!("- auto param = \"t=1&u=1\";\na(href=\"/?#{param}&v=1\") foo")
+			== `<a href="/?t=1&amp;u=1&amp;v=1">foo</a>`);
+
+	// issue #1021
+	assert(compile!("html( lang=\"en\" )")
+		== "<html lang=\"en\"></html>");
+
+	// issue #1033
+	assert(compile!("input(placeholder=')')")
+		== "<input placeholder=\")\"/>");
+	assert(compile!("input(placeholder='(')")
+		== "<input placeholder=\"(\"/>");
+}
+
+unittest { // blocks and extensions
+	static string compilePair(string extension, string base, ALIASES...)() {
+		import std.array : appender;
+		import std.string : strip;
+		auto dst = appender!string;
+		compileHTMLDietStrings!(Group!(extension, "extension.dt", base, "base.dt"), ALIASES)(dst);
+		return strip(dst.data);
+	}
+
+	assert(compilePair!("extends base\nblock test\n\tp Hello", "body\n\tblock test")
+		 == "<body>\n\t<p>Hello</p>\n</body>");
+	assert(compilePair!("extends base\nblock test\n\tp Hello", "body\n\tblock test\n\t\tp Default")
+		 == "<body>\n\t<p>Hello</p>\n</body>", compilePair!("extends base\nblock test\n\tp Hello", "body\n\tblock test\n\t\tp Default"));
+	assert(compilePair!("extends base", "body\n\tblock test\n\t\tp Default")
+		 == "<body>\n\t<p>Default</p>\n</body>");
+	assert(compilePair!("extends base\nprepend test\n\tp Hello", "body\n\tblock test\n\t\tp Default")
+		 == "<body>\n\t<p>Hello</p>\n\t<p>Default</p>\n</body>");
 }
