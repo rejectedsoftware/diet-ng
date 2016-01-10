@@ -151,6 +151,22 @@ unittest { // test basic functionality
 	assert(parseDiet("<inline>") == [
 		new Node(ln(0), "|", null, [NodeContent.text("<inline>", ln(0))])
 	]);
+
+	// nested nodes
+	assert(parseDiet("a: b") == [
+		new Node(ln(0), "a", null, [
+			NodeContent.tag(new Node(ln(0), "b"))
+		])
+	]);
+
+	assert(parseDiet("a: b\n\tc\nd") == [
+		new Node(ln(0), "a", null, [
+			NodeContent.tag(new Node(ln(0), "b", null, [
+				NodeContent.tag(new Node(ln(1), "c"))
+			]))
+		]),
+		new Node(ln(2), "d")
+	], parseDiet("a: b\n\tc\nd").text);
 }
 
 unittest { // test expected errors
@@ -317,13 +333,16 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 	int skiplevel = int.max;
 	string input = files[file_index].contents;
 	Node[] ret;
-	Node[] stack;
+	Node[][] stack;
 	stack.length = 8;
 	bool prev_was_include = false;
 	bool is_extension = false;
 
 	next_line:
 	while (input.length) {
+		Node pnode;
+		if (prevlevel >= 0 && stack[prevlevel].length) pnode = stack[prevlevel][$-1];
+
 		// skip whitespace at the beginning of the line
 		string indent = input.skipIndent();
 
@@ -343,7 +362,7 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 		if (indent_style.length) {
 			while (indent.startsWith(indent_style)) {
 				if (level > prevlevel) {
-					enforcep((stack[prevlevel].attribs & (NodeAttribs.textNode|NodeAttribs.rawTextNode)) != 0,
+					enforcep((pnode.attribs & (NodeAttribs.textNode|NodeAttribs.rawTextNode)) != 0,
 						prev_was_include ? "Includes cannot have children." : "Line is indented too deeply.", loc);
 					textindent = indent;
 					indent = null;
@@ -363,18 +382,18 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 		// read the whole line as text if the parent node is a pure text node
 		// ("." suffix) or pure raw text node (e.g. comments)
 		if (level > prevlevel && prevlevel >= 0) {
-			if (stack[prevlevel].attribs & NodeAttribs.textNode) {
-				if (!stack[prevlevel].contents.empty)
-					stack[prevlevel].addText("\n", loc);
-				if (textindent.length) stack[prevlevel].addText(textindent, loc);
-				parseTextLine(input, stack[prevlevel], loc);
+			if (pnode.attribs & NodeAttribs.textNode) {
+				if (!pnode.contents.empty)
+					pnode.addText("\n", loc);
+				if (textindent.length) pnode.addText(textindent, loc);
+				parseTextLine(input, pnode, loc);
 				continue;
-			} else if (stack[prevlevel].attribs & NodeAttribs.rawTextNode) {
-				if (!stack[prevlevel].contents.empty)
-					stack[prevlevel].addText("\n", loc);
-				if (textindent.length) stack[prevlevel].addText(textindent, loc);
+			} else if (pnode.attribs & NodeAttribs.rawTextNode) {
+				if (!pnode.contents.empty)
+					pnode.addText("\n", loc);
+				if (textindent.length) pnode.addText(textindent, loc);
 				auto tmploc = loc;
-				stack[prevlevel].addText(skipLine(input, loc), tmploc);
+				pnode.addText(skipLine(input, loc), tmploc);
 				continue;
 			}
 		}
@@ -409,7 +428,7 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 			}
 
 			if (level == 0) ret ~= incnodes;
-			else foreach (n; incnodes) stack[level-1].contents ~= NodeContent.tag(n);
+			else foreach (n; incnodes) stack[level-1][$-1].contents ~= NodeContent.tag(n);
 			prevlevel = level-1;
 			continue;
 		} else prev_was_include = false;
@@ -427,7 +446,7 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 					import std.algorithm : map;
 					import std.array : array;
 					if (level == 0) ret ~= pb.contents;
-					else stack[level-1].contents ~= pb.contents.map!(n => NodeContent.tag(n)).array;
+					else stack[level-1][$-1].contents ~= pb.contents.map!(n => NodeContent.tag(n)).array;
 				}
 
 				assert(pb.mode <= 0, "Prepend block mode not yet supported.");
@@ -450,19 +469,24 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 			n.attribs |= NodeAttribs.rawTextNode;
 			auto tmploc = loc;
 			n.addText(skipLine(input, loc), tmploc);
-			stack[level] = n;
+			stack[level] = [n];
 		} else {
 			// normal tag line
-			stack[level] = parseTagLine(input, loc);
+			bool has_nested;
+			stack[level] = null;
+			do stack[level] ~= parseTagLine(input, loc, has_nested);
+			while (has_nested);
 
 			// test if first node is an "extends" node
-			if (prevlevel < 0 && stack[level].name == "extends")
+			if (prevlevel < 0 && stack[level][0].name == "extends")
 				is_extension = true;
 		}
 
 		// add it to its parent contents
-		if (level > 0) stack[level-1].contents ~= NodeContent.tag(stack[level]);
-		else ret ~= stack[0];
+		foreach (i; 1 .. stack[level].length)
+			stack[level][i-1].contents ~= NodeContent.tag(stack[level][i]);
+		if (level > 0) stack[level-1][$-1].contents ~= NodeContent.tag(stack[level][0]);
+		else ret ~= stack[0][0];
 
 		// remember the nesting level for the next line
 		prevlevel = level;
@@ -471,7 +495,7 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 	return ret;
 }
 
-private Node parseTagLine(ref string input, ref Location loc)
+private Node parseTagLine(ref string input, ref Location loc, out bool has_nested)
 {
 	import std.ascii : isWhite;
 
@@ -488,7 +512,14 @@ private Node parseTagLine(ref string input, ref Location loc)
 		ret.name = "|";
 	} else if (input.startsWith("<")) { // inline HTML/XML
 		ret.name = "|";
-	} else ret.name = skipIdent(input, idx, ":-_", loc);
+	} else {
+		ret.name = skipIdent(input, idx, ":-_", loc);
+		// a trailing ':' is not part of the tag name, but signals a nested node
+		if (ret.name.endsWith(":")) {
+			ret.name = ret.name[0 .. $-1];
+			idx--;
+		}
+	}
 
 	if (ret.name != "|") {
 		// node ID
@@ -531,6 +562,24 @@ private Node parseTagLine(ref string input, ref Location loc)
 		ret.attribs |= NodeAttribs.textNode;
 		idx++;
 		skipLine(input, idx, loc); // ignore the rest of the line
+		input = input[idx .. $];
+	} else if (idx < input.length && input[idx] == ':') {
+		idx++;
+
+		// skip trailing whitespace (but no line breaks)
+		while (idx < input.length && (input[idx] == ' ' || input[idx] == '\t'))
+			idx++;
+
+		// see if we got anything left on the line
+		if (idx < input.length) {
+			if (input[idx] == '\n' || input[idx] == '\r') {
+				// FIXME: should we rather error out here?
+				skipLine(input, idx, loc);
+			} else {
+				// leaves the rest of the line to parse another tag
+				has_nested = true;
+			}
+		}
 		input = input[idx .. $];
 	} else {
 		input = input[idx .. $];
