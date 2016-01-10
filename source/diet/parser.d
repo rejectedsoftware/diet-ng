@@ -167,6 +167,13 @@ unittest { // test basic functionality
 		]),
 		new Node(ln(2), "d")
 	], parseDiet("a: b\n\tc\nd").text);
+
+	// inline nodes
+	assert(parseDiet("a #[b]") == [
+		new Node(ln(0), "a", null, [
+			NodeContent.tag(new Node(ln(0), "b"))
+		])
+	]);
 }
 
 unittest { // test expected errors
@@ -184,8 +191,8 @@ unittest { // test expected errors
 	testFail("test\n\ttest\n\t\t\ttest", "Line is indented too deeply.");
 	testFail("test#", "Expected identifier but got nothing.");
 	testFail("test.()", "Expected identifier but got '('.");
-	testFail("test #.", "Expected '{' following '#'.");
-	testFail("test !.", "Expected '{' following '!'.");
+	testFail("test #.", "Expected '{' or '[' following '#'.");
+	testFail("test !.", "Expected '{' or '[' following '!'.");
 	testFail("test ##", "Use '\\#' instead of '##' for escaping.");
 	testFail("test !!", "Use '\\!' instead of '!!' for escaping.");
 }
@@ -614,14 +621,23 @@ private void parseTextLine(ref string input, ref Node dst, ref Location loc)
 			case '!', '#':
 				flushText();
 				idx++;
-				enforcep(idx < input.length && (input[idx] == cur || input[idx] == '{'),
-					"Expected '{' following '"~cur~"'.", loc);
-				enforcep(input[idx] == '{', "Use '\\"~cur~"' instead of '"~cur~cur~"' for escaping.", loc);
-				idx++;
-				auto expr = skipUntilClosingBrace(input, idx, loc);
-				idx++;
-				if (cur == '#') dst.contents ~= NodeContent.interpolation(expr, loc);
-				else dst.contents ~= NodeContent.rawInterpolation(expr, loc);
+				enforcep(idx < input.length && (input[idx] == cur || input[idx] == '{' || input[idx] == '['),
+					"Expected '{' or '[' following '"~cur~"'.", loc);
+				enforcep(input[idx] == '{' || input[idx] == '[', "Use '\\"~cur~"' instead of '"~cur~cur~"' for escaping.", loc);
+				if (input[idx] == '{') {
+					idx++;
+					auto expr = skipUntilClosingBrace(input, idx, loc);
+					idx++;
+					if (cur == '#') dst.contents ~= NodeContent.interpolation(expr, loc);
+					else dst.contents ~= NodeContent.rawInterpolation(expr, loc);
+				} else {
+					idx++;
+					auto tag = skipUntilClosingBracket(input, idx, loc);
+					idx++;
+					bool has_nested;
+					dst.contents ~= NodeContent.tag(parseTagLine(tag, loc, has_nested));
+					enforcep(!has_nested, "Nested inline tags not allowed.", loc);
+				}
 				sidx = idx;
 				break;
 			case '\r':
@@ -768,6 +784,22 @@ private string skipUntilClosingBrace(in ref string s, ref size_t idx, in ref Loc
 	while( idx < s.length ){
 		if( s[idx] == '{' ) level++;
 		else if( s[idx] == '}' ) level--;
+		enforcep(s[idx] != '\n', "Missing '}' before end of line.", loc);
+		if( level < 0 ) return s[start .. idx];
+		idx++;
+	}
+	enforcep(false, "Missing closing brace", loc);
+	assert(false);
+}
+
+private string skipUntilClosingBracket(in ref string s, ref size_t idx, in ref Location loc)
+{
+	int level = 0;
+	auto start = idx;
+	while( idx < s.length ){
+		if( s[idx] == '[' ) level++;
+		else if( s[idx] == ']' ) level--;
+		enforcep(s[idx] != '\n', "Missing ']' before end of line.", loc);
 		if( level < 0 ) return s[start .. idx];
 		idx++;
 	}
