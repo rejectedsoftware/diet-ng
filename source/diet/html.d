@@ -28,13 +28,13 @@ private template localAliases(int i, ALIASES...)
 
 template compileHTMLDietFile(string filename, ALIASES...)
 {
-	void compileHTMLDietFile2(R)(ref R _output_)
+	void compileHTMLDietFile(R)(ref R _output_)
 	{
 		mixin(localAliases!(0, ALIASES));
 		alias files = collectFiles!filename;
 		//compileHTMLDietStrings!(files, ALIASES)(dst);
 		enum nodes = parseDiet(files);
-		pragma(msg, getHTMLMixin(nodes));
+		//pragma(msg, getHTMLMixin(nodes));
 		mixin(getHTMLMixin(nodes));
 	}
 }
