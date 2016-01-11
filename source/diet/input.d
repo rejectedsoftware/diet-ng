@@ -19,3 +19,20 @@ struct InputFile {
 	string name;
 	string contents;
 }
+
+
+template Group(A...) {
+	import std.typetuple;
+	alias expand = TypeTuple!A;
+}
+
+template localAliases(int i, ALIASES...)
+{
+	static if (i < ALIASES.length) {
+		import std.conv : to;
+		enum string localAliases = "alias ALIASES["~i.to!string~"] "~__traits(identifier, ALIASES[i])~";\n"
+			~localAliases!(i+1, ALIASES);
+	} else {
+		enum string localAliases = "";
+	}
+}

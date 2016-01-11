@@ -10,22 +10,6 @@ import diet.parser;
 
 enum defaultOutputRangeName = "_output_";
 
-private template Group(A...) {
-	import std.typetuple;
-	alias expand = TypeTuple!A;
-}
-
-private template localAliases(int i, ALIASES...)
-{
-	static if (i < ALIASES.length) {
-		import std.conv : to;
-		enum string localAliases = "alias ALIASES["~i.to!string~"] "~__traits(identifier, ALIASES[i])~";\n"
-			~localAliases!(i+1, ALIASES);
-	} else {
-		enum string localAliases = "";
-	}
-}
-
 template compileHTMLDietFile(string filename, ALIASES...)
 {
 	void compileHTMLDietFile(R)(ref R _output_)
