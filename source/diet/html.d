@@ -5,13 +5,38 @@ import diet.exception;
 import diet.internal.html;
 import diet.internal.string;
 import diet.input;
+import diet.parser;
 
 
 enum defaultOutputRangeName = "_output_";
 
-template Group(A...) {
+private template Group(A...) {
 	import std.typetuple;
 	alias expand = TypeTuple!A;
+}
+
+private template localAliases(int i, ALIASES...)
+{
+	static if (i < ALIASES.length) {
+		import std.conv : to;
+		enum string localAliases = "alias ALIASES["~i.to!string~"] "~__traits(identifier, ALIASES[i])~";\n"
+			~localAliases!(i+1, ALIASES);
+	} else {
+		enum string localAliases = "";
+	}
+}
+
+template compileHTMLDietFile(string filename, ALIASES...)
+{
+	void compileHTMLDietFile2(R)(ref R _output_)
+	{
+		mixin(localAliases!(0, ALIASES));
+		alias files = collectFiles!filename;
+		//compileHTMLDietStrings!(files, ALIASES)(dst);
+		enum nodes = parseDiet(files);
+		pragma(msg, getHTMLMixin(nodes));
+		mixin(getHTMLMixin(nodes));
+	}
 }
 
 template compileHTMLDietString(string contents, ALIASES...)
@@ -40,6 +65,7 @@ string getHTMLMixin(in Node[] nodes, string range_name = defaultOutputRangeName)
 	string ret = "import std.conv : to;\n";
 	foreach (n; nodes)
 		ret ~= ctx.getHTMLMixin(n);
+	ret ~= ctx.flushRawText();
 	return ret;
 }
 
@@ -86,7 +112,7 @@ private string getElementMixin(ref CTX ctx, in Node node)
 	import std.algorithm : countUntil;
 
 	// write tag name
-	string ret = statement(node.loc, q{%s.put("<%s");}, ctx.rangeName, node.name);
+	string ret = ctx.rawText(node.loc, "<"~node.name);
 
 	bool had_class = false;
 
@@ -111,40 +137,40 @@ private string getElementMixin(ref CTX ctx, in Node node)
 			auto expr = att.values[0].value;
 
 			if (expr == "true") {
-				if (ctx.isHTML5) ret ~= statement(node.loc, q{%s.put(" %s");}, ctx.rangeName, att.name);
-				else ret ~= statement(node.loc, q{%s.put(" %s=\"%s\"");}, ctx.rangeName, att.name, att.name);
+				if (ctx.isHTML5) ret ~= ctx.rawText(node.loc, " "~att.name);
+				else ret ~= ctx.rawText(node.loc, " "~att.name~"=\""~att.name~"\"");
 				continue;
 			}
 
-			ret ~= statement(node.loc, q{static if (is(typeof(%s) == bool)) }~'{', expr);
-			if (ctx.isHTML5) ret ~= statement(node.loc, q{if (%s) %s.put(" %s");}, expr, ctx.rangeName, att.name);
-			else ret ~= statement(node.loc, q{if (%s) %s.put(" %s=\"%s\"");}, expr, ctx.rangeName, att.name, att.name);
-			ret ~= statement(node.loc, "} else "~q{static if (is(typeof(%s) : const(char)[])) }~'{', expr);
-			ret ~= statement(node.loc, q{  auto val = %s;}, expr);
-			ret ~= statement(node.loc, q{  if (val !is null) }~'{');
-			ret ~= statement(node.loc, q{    %s.put(" %s=\"");}, ctx.rangeName, att.name);
-			ret ~= statement(node.loc, q{    %s.filterHTMLAttribEscape(val);}, ctx.rangeName);
-			ret ~= rawText(node.loc, ctx.rangeName, "\"");
-			ret ~= statement(node.loc, "  }");
-			ret ~= statement(node.loc, "} else {");
+			ret ~= ctx.statement(node.loc, q{static if (is(typeof(%s) == bool)) }~'{', expr);
+			if (ctx.isHTML5) ret ~= ctx.statement(node.loc, q{if (%s) %s.put(" %s");}, expr, ctx.rangeName, att.name);
+			else ret ~= ctx.statement(node.loc, q{if (%s) %s.put(" %s=\"%s\"");}, expr, ctx.rangeName, att.name, att.name);
+			ret ~= ctx.statement(node.loc, "} else "~q{static if (is(typeof(%s) : const(char)[])) }~'{', expr);
+			ret ~= ctx.statement(node.loc, q{  auto val = %s;}, expr);
+			ret ~= ctx.statement(node.loc, q{  if (val !is null) }~'{');
+			ret ~= ctx.rawText(node.loc, " "~att.name~"=\"");
+			ret ~= ctx.statement(node.loc, q{    %s.filterHTMLAttribEscape(val);}, ctx.rangeName);
+			ret ~= ctx.rawText(node.loc, "\"");
+			ret ~= ctx.statement(node.loc, "  }");
+			ret ~= ctx.statement(node.loc, "} else {");
 		}
 
-		ret ~= statement(node.loc, q{%s.put(" %s=\"");}, ctx.rangeName, att.name);
+		ret ~= ctx.rawText(node.loc, " "~att.name ~ "=\"");
 
 		foreach (i, v; att.values) {
 			final switch (v.kind) with (AttributeContent.Kind) {
 				case text:
-					ret ~= rawText(node.loc, ctx.rangeName, htmlAttribEscape(v.value));
+					ret ~= ctx.rawText(node.loc, htmlAttribEscape(v.value));
 					break;
 				case interpolation, rawInterpolation:
-					ret ~= statement(node.loc, q{%s.filterHTMLAttribEscape((%s).to!string);}, ctx.rangeName, v.value);
+					ret ~= ctx.statement(node.loc, q{%s.filterHTMLAttribEscape((%s).to!string);}, ctx.rangeName, v.value);
 					break;
 			}
 		}
 
-		ret ~= rawText(node.loc, ctx.rangeName, "\"");
+		ret ~= ctx.rawText(node.loc, "\"");
 
-		if (is_expr) ret ~= statement(node.loc, "}");
+		if (is_expr) ret ~= ctx.statement(node.loc, "}");
 	}
 
 	// determine if we need a closing tag or have a singular tag
@@ -153,12 +179,12 @@ private string getElementMixin(ref CTX ctx, in Node node)
 		case "area", "base", "basefont", "br", "col", "embed", "frame",	"hr", "img", "input",
 				"keygen", "link", "meta", "param", "source", "track", "wbr":
 			enforcep(!node.contents.length, "Singular HTML element '"~node.name~"' may not have contents.", node.loc);
-			ret ~= rawText(node.loc, ctx.rangeName, "/>");
+			ret ~= ctx.rawText(node.loc, "/>");
 			enforcep(node.contents.length == 0, "Singular tag <"~node.name~"> may not have contents.", node.loc);
 			return ret;
 	}
 
-	ret ~= rawText(node.loc, ctx.rangeName, ">");
+	ret ~= ctx.rawText(node.loc, ">");
 
 	// write contents
 	ctx.depth++;
@@ -167,7 +193,7 @@ private string getElementMixin(ref CTX ctx, in Node node)
 	ctx.depth--;
 
 	// write end tag
-	ret ~= statement(node.loc, q{%s.put("</%s>");}, ctx.rangeName, node.name);
+	ret ~= ctx.rawText(node.loc, "</"~node.name~">");
 
 	return ret;
 }
@@ -179,15 +205,15 @@ private string getNodeContentsMixin(ref CTX ctx, in NodeContent c)
 		case node:
 			string ret;
 			ret ~= ctx.prettyNewLine(c.loc);
-			ret ~= getElementMixin(ctx, c.node);
+			ret ~= getHTMLMixin(ctx, c.node);
 			ret ~= ctx.prettyNewLine(c.loc);
 			return ret;
 		case text:
-			return rawText(c.loc, ctx.rangeName, c.value);
+			return ctx.rawText(c.loc, c.value);
 		case interpolation:
-			return statement(c.loc, q{%s.filterHTMLEscape((%s).to!string);}, ctx.rangeName, c.value);
+			return ctx.statement(c.loc, q{%s.filterHTMLEscape((%s).to!string);}, ctx.rangeName, c.value);
 		case rawInterpolation:
-			return statement(c.loc, q{%s.put((%s).to!string);}, ctx.rangeName, c.value);
+			return ctx.statement(c.loc, q{%s.put((%s).to!string);}, ctx.rangeName, c.value);
 	}
 }
 
@@ -196,7 +222,7 @@ private string getDoctypeMixin(ref CTX ctx, in Node node)
 	import diet.internal.string;
 
 	if (node.name == "!!!")
-		statement(node.loc, q{pragma(msg, "Use of '!!!' is deprecated. Use 'doctype' instead.");});
+		ctx.statement(node.loc, q{pragma(msg, "Use of '!!!' is deprecated. Use 'doctype' instead.");});
 
 	enforcep(node.contents.length == 1 && node.contents[0].kind == NodeContent.Kind.text,
 		"Only doctype specifiers allowed as content for doctype nodes.", node.loc);
@@ -244,7 +270,7 @@ private string getDoctypeMixin(ref CTX ctx, in Node node)
 		break;
 	}
 
-	return statement(node.loc, q{%s.put("<%s>");}, ctx.rangeName, dstringEscape(doctype_str));
+	return ctx.rawText(node.loc, "<"~dstringEscape(doctype_str)~">");
 }
 
 private string getCodeMixin(ref CTX ctx, in ref Node node)
@@ -257,34 +283,23 @@ private string getCodeMixin(ref CTX ctx, in ref Node node)
 	bool got_code = false;
 	foreach (i, c; node.contents) {
 		if (i == 0 && c.kind == NodeContent.Kind.text) {
-			ret ~= statement(node.loc, "%s {", c.value);
+			ret ~= ctx.statement(node.loc, "%s {", c.value);
 			got_code = true;
 		} else {
 			ret ~= ctx.getNodeContentsMixin(c);
 		}
 	}
-	ret ~= statement(node.loc, "}");
+	ret ~= ctx.statement(node.loc, "}");
 	return ret;
 }
 
 private string getCommentMixin(ref CTX ctx, in ref Node node)
 {
-	string ret = rawText(node.loc, ctx.rangeName, "<!--");
+	string ret = ctx.rawText(node.loc, "<!--");
 	foreach (c; node.contents)
 		ret ~= ctx.getNodeContentsMixin(c);
-	ret ~= rawText(node.loc, ctx.rangeName, "-->");
+	ret ~= ctx.rawText(node.loc, "-->");
 	return ret;
-}
-
-private pure string statement(ARGS...)(Location loc, string fmt, ARGS args)
-{
-	import std.string : format;
-	return ("#line %s \"%s\"\n"~fmt~"\n").format(loc.line+1, loc.file, args);
-}
-
-private pure string rawText(ARGS...)(Location loc, string range_name, string text)
-{
-	return statement(loc, q{%s.put("%s");}, range_name, dstringEscape(text));
 }
 
 private struct CTX {
@@ -292,10 +307,39 @@ private struct CTX {
 	bool pretty = false;
 	int depth = 0;
 	string rangeName;
+	bool inRawText;
+
+	pure string statement(ARGS...)(Location loc, string fmt, ARGS args)
+	{
+		import std.string : format;
+		string ret = flushRawText();
+		ret ~= ("#line %s \"%s\"\n"~fmt~"\n").format(loc.line+1, loc.file, args);
+		return ret;
+	}
+
+	pure string rawText(ARGS...)(Location loc, string text)
+	{
+		string ret;
+		if (!this.inRawText) {
+			ret = this.rangeName ~ ".put(\"";
+			this.inRawText = true;
+		}
+		ret ~= dstringEscape(text);
+		return ret;
+	}
+
+	pure string flushRawText()
+	{
+		if (this.inRawText) {
+			this.inRawText = false;
+			return "\");\n";
+		}
+		return null;
+	}
 
 	string prettyNewLine(in ref Location loc) {
 		import std.array : replicate;
-		if (pretty) return rawText(loc, rangeName, "\n"~"\t".replicate(depth));
+		if (pretty) return rawText(loc, "\n"~"\t".replicate(depth));
 		else return null;
 	}
 }
