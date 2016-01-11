@@ -13,6 +13,8 @@ module diet.input;
 	return ret;
 }
 
+enum InputFile[] collectFiles(string root_file) = [InputFile(root_file, import(root_file))]; // TODO!
+
 struct InputFile {
 	string name;
 	string contents;
