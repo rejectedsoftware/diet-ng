@@ -176,6 +176,114 @@ unittest { // test basic functionality
 	]);
 }
 
+unittest {
+	import std.conv : to;
+	Location ln(int l) { return Location("string", l); }
+
+	// angular2 html attributes tests
+	assert(parseDiet("div([value]=\"firstName\")") == [
+		new Node(ln(0), "div", [
+			Attribute("[value]", [
+				AttributeContent.text("firstName"),
+			])
+		])
+	]);
+
+	assert(parseDiet("div([attr.role]=\"myRole\")") == [
+		new Node(ln(0), "div", [
+			Attribute("[attr.role]", [
+				AttributeContent.text("myRole"),
+			])
+		])
+	]);
+
+	assert(parseDiet("div([attr.role]=\"{foo:myRole}\")") == [
+		new Node(ln(0), "div", [
+			Attribute("[attr.role]", [
+				AttributeContent.text("{foo:myRole}"),
+			])
+		])
+	]);
+
+	assert(parseDiet("div([attr.role]=\"{foo:myRole, bar:MyRole}\")") == [
+		new Node(ln(0), "div", [
+			Attribute("[attr.role]", [
+				AttributeContent.text("{foo:myRole, bar:MyRole}")
+			])
+		])
+	]);
+
+	assert(parseDiet("div((attr.role)=\"{foo:myRole, bar:MyRole}\")") == [
+		new Node(ln(0), "div", [
+			Attribute("(attr.role)", [
+				AttributeContent.text("{foo:myRole, bar:MyRole}")
+			])
+		])
+	]);
+
+	assert(parseDiet("div([class.extra-sparkle]=\"isDelightful\")") == [
+		new Node(ln(0), "div", [
+			Attribute("[class.extra-sparkle]", [
+				AttributeContent.text("isDelightful")
+			])
+		])
+	]);
+
+	auto t = parseDiet("div((click)=\"readRainbow($event)\")");
+	assert(t == [
+		new Node(ln(0), "div", [
+			Attribute("(click)", [
+				AttributeContent.text("readRainbow($event)")
+			])
+		])
+	], to!string(t));
+
+	assert(parseDiet("div([(title)]=\"name\")") == [
+		new Node(ln(0), "div", [
+			Attribute("[(title)]", [
+				AttributeContent.text("name")
+			])
+		])
+	]);
+
+	assert(parseDiet("div(*myUnless=\"myExpression\")") == [
+		new Node(ln(0), "div", [
+			Attribute("*myUnless", [
+				AttributeContent.text("myExpression")
+			])
+		])
+	]);
+
+	assert(parseDiet("div([ngClass]=\"{active: isActive, disabled: isDisabled}\")") == [
+		new Node(ln(0), "div", [
+			Attribute("[ngClass]", [
+				AttributeContent.text("{active: isActive, disabled: isDisabled}")
+			])
+		])
+	]);
+
+	t = parseDiet("div(*ngFor=\"\\#item of list\")");
+	assert(t == [
+		new Node(ln(0), "div", [
+			Attribute("*ngFor", [
+				AttributeContent.text("#"),
+				AttributeContent.text("item of list")
+			])
+		])
+	], to!string(t));
+
+	t = parseDiet("div(({*ngFor})=\"{args:\\#item of list}\")");
+	assert(t == [
+		new Node(ln(0), "div", [
+			Attribute("({*ngFor})", [
+				AttributeContent.text("{args:"),
+				AttributeContent.text("#"),
+				AttributeContent.text("item of list}")
+			])
+		])
+	], to!string(t));
+}
+
 unittest { // test expected errors
 	void testFail(string diet, string msg)
 	{
@@ -285,6 +393,56 @@ unittest { // test CTFE-ability
 	static assert(result.length == 1);
 }
 
+private string parseIdent(in ref string str, ref size_t start,
+	   	string breakChars, in ref Location loc)
+{
+	import std.array : back;
+	/* The stack is used to keep track of opening and
+	closing character pairs, so that when we hit a break char of
+	breakChars we know if we can actually break parseIdent.
+	*/
+	char[] stack;
+	size_t i = start;
+	outer: while(i < str.length) {
+		if(stack.length == 0) {
+			foreach(char it; breakChars) {
+				if(str[i] == it) {
+					break outer;
+				}
+			}
+		}
+
+		if(stack.length && stack.back == str[i]) {
+			stack = stack[0 .. $ - 1];
+		} else if(str[i] == '"') {
+			stack ~= '"';
+		} else if(str[i] == '(') {
+			stack ~= ')';
+		} else if(str[i] == '[') {
+			stack ~= ']';
+		} else if(str[i] == '{') {
+			stack ~= '}';
+		}
+		++i;
+	}
+
+	/* We could have consumed the complete string and still have elements
+	on the stack or have ended non breakChars character.
+	*/
+	if(stack.length == 0) {
+		foreach(char it; breakChars) {
+			if(str[i] == it) {
+				size_t startC = start;
+				start = i;
+				return str[startC .. i];
+			}
+		}
+	}
+	enforcep(false, "Identifier was not ended by any of these characters: "
+		~ breakChars, loc);
+	assert(false);
+}
+
 private Node[] parseDietWithExtensions(InputFile[] files, size_t file_index, BlockInfo[string] blocks)
 {
 	import std.algorithm : countUntil, filter, map;
@@ -304,7 +462,7 @@ private Node[] parseDietWithExtensions(InputFile[] files, size_t file_index, Blo
 	foreach (n; nodes[1 .. $]) {
 		int mode;
 		switch (n.name) {
-			default: 
+			default:
 				enforcep(false, "Extension templates may only contain blocks definitions at the root level.", n.loc);
 				break;
 			case "block": mode = 0; break;
@@ -430,7 +588,7 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 					}
 				enforcep(fi != size_t.max, "Missing include input file: "~name, loc);
 				enforcep(fi != file_index, "Recursive include.", loc);
-			
+
 				incnodes = parseDiet(files, fi, blocks);
 			}
 
@@ -701,7 +859,7 @@ private void parseAttributes(ref string input, ref size_t i, ref Node node, in r
 
 	skipWhitespace(input, i);
 	while (i < input.length && input[i] != ')') {
-		string name = skipIdent(input, i, "-:", loc);
+		string name = parseIdent(input, i, ",)=", loc);
 		string value;
 		skipWhitespace(input, i);
 		if( i < input.length && input[i] == '=' ){
@@ -758,6 +916,10 @@ private void parseAttributeText(string input, ref AttributeContent[] dst, in ref
 				sidx = idx;
 				break;
 			case '!', '#':
+				/*
+				if(idx > 0 && input[idx - 1] == '\\') {
+					goto default;
+				}*/
 				flushText();
 				idx++;
 				enforcep(idx < input.length && (input[idx] == cur || input[idx] == '{'),
