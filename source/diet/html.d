@@ -72,6 +72,9 @@ unittest {
 	test!"foo= 2+3"("<foo>5</foo>");
 	test!"- int x = 3;\nfoo=x"("<foo>3</foo>");
 	test!"- foreach (i; 0 .. 2)\n\tfoo"("<foo></foo><foo></foo>");
+	test!"div(*ngFor=\"\\#item of list\")"(
+		"<div *ngFor=\"#item of list\"></div>"
+	);
 }
 
 private string getHTMLMixin(ref CTX ctx, in Node node)
