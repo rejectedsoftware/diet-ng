@@ -110,11 +110,11 @@ unittest { // test basic functionality
 	]);
 
 	// interpolated text
-	assert(parseDiet("foo hello #{\"world\"} bar") == [
+	assert(parseDiet("foo hello #{\"world\"} #bar") == [
 		new Node(ln(0), "foo", null, [
 			NodeContent.text("hello ", ln(0)),
 			NodeContent.interpolation(`"world"`, ln(0)),
-			NodeContent.text(" bar", ln(0))
+			NodeContent.text(" #bar", ln(0))
 		])
 	]);
 
@@ -140,12 +140,12 @@ unittest { // test basic functionality
 	]);
 
 	// interpolated attribute text
-	assert(parseDiet("foo(att='hello #{\"world\"} bar')") == [
+	assert(parseDiet("foo(att='hello #{\"world\"} #bar')") == [
 		new Node(ln(0), "foo", [
 			Attribute("att", [
 				AttributeContent.text("hello "),
 				AttributeContent.interpolation(`"world"`),
-				AttributeContent.text(" bar")
+				AttributeContent.text(" #bar")
 			])
 		])
 	]);
@@ -320,10 +320,6 @@ unittest { // test expected errors
 	testFail("test\n\ttest\n\t\t\ttest", "Line is indented too deeply.");
 	testFail("test#", "Expected identifier but got nothing.");
 	testFail("test.()", "Expected identifier but got '('.");
-	testFail("test #.", "Expected '{' or '[' following '#'.");
-	testFail("test !.", "Expected '{' or '[' following '!'.");
-	testFail("test ##", "Use '\\#' instead of '##' for escaping.");
-	testFail("test !!", "Use '\\!' instead of '!!' for escaping.");
 }
 
 unittest { // includes
@@ -807,26 +803,24 @@ private void parseTextLine(ref string input, ref Node dst, ref Location loc)
 		switch (cur) {
 			default: idx++; break;
 			case '!', '#':
-				flushText();
-				idx++;
-				enforcep(idx < input.length && (input[idx] == cur || input[idx] == '{' || input[idx] == '['),
-					"Expected '{' or '[' following '"~cur~"'.", loc);
-				enforcep(input[idx] == '{' || input[idx] == '[', "Use '\\"~cur~"' instead of '"~cur~cur~"' for escaping.", loc);
-				if (input[idx] == '{') {
-					idx++;
+				if (idx+1 < input.length && input[idx+1] == '{') {
+					flushText();
+					idx += 2;
 					auto expr = skipUntilClosingBrace(input, idx, loc);
 					idx++;
 					if (cur == '#') dst.contents ~= NodeContent.interpolation(expr, loc);
 					else dst.contents ~= NodeContent.rawInterpolation(expr, loc);
-				} else {
-					idx++;
+					sidx = idx;
+				} else if (cur == '#' && idx+1 < input.length && input[idx+1] == '[') {
+					flushText();
+					idx += 2;
 					auto tag = skipUntilClosingBracket(input, idx, loc);
 					idx++;
 					bool has_nested;
 					dst.contents ~= NodeContent.tag(parseTagLine(tag, loc, has_nested));
 					enforcep(!has_nested, "Nested inline tags not allowed.", loc);
-				}
-				sidx = idx;
+					sidx = idx;
+				} else idx++;
 				break;
 			case '\r':
 				flushText();
@@ -946,21 +940,15 @@ private void parseAttributeText(string input, ref AttributeContent[] dst, in ref
 				sidx = idx;
 				break;
 			case '!', '#':
-				/*
-				if(idx > 0 && input[idx - 1] == '\\') {
-					goto default;
-				}*/
-				flushText();
-				idx++;
-				enforcep(idx < input.length && (input[idx] == cur || input[idx] == '{'),
-					"Expected '{' following '"~cur~"'.", loc);
-				enforcep(input[idx] == '{', "Use '\\"~cur~"' instead of '"~cur~cur~"' for escaping.", loc);
-				idx++;
-				auto expr = dstringUnescape(skipUntilClosingBrace(input, idx, loc));
-				idx++;
-				if (cur == '#') dst ~= AttributeContent.interpolation(expr);
-				else dst ~= AttributeContent.rawInterpolation(expr);
-				sidx = idx;
+				if (idx+1 < input.length && input[idx+1] == '{') {
+					flushText();
+					idx += 2;
+					auto expr = dstringUnescape(skipUntilClosingBrace(input, idx, loc));
+					idx++;
+					if (cur == '#') dst ~= AttributeContent.interpolation(expr);
+					else dst ~= AttributeContent.rawInterpolation(expr);
+					sidx = idx;
+				} else idx++;
 				break;
 		}
 	}
