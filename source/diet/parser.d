@@ -371,6 +371,7 @@ unittest { // extensions
 			InputFile("main.dt", diet),
 			InputFile("root.dt", "html\n\tblock a\n\tblock b"),
 			InputFile("intermediate.dt", "extends root\nblock a\n\tp"),
+			InputFile("direct.dt", "block a")
 		];
 		return parseDiet(files);
 	}
@@ -416,6 +417,10 @@ unittest { // extensions
 			NodeContent.tag(new Node(Location("main.dt", 2), "pre", null, null)),
 			NodeContent.tag(new Node(Location("intermediate.dt", 2), "p", null, null))
 		])
+	]);
+	assert(parse("extends direct") == []);
+	assert(parse("extends direct\nblock a\n\tp") == [
+		new Node(Location("main.dt", 2), "p", null, null)
 	]);
 }
 
@@ -481,7 +486,7 @@ private Node[] parseDietWithExtensions(InputFile[] files, size_t file_index, Blo
 	import std.path : stripExtension;
 
 	auto nodes = parseDiet(files, file_index, blocks);
-	if (nodes[0].name != "extends") return nodes;
+	if (!nodes.length || nodes[0].name != "extends") return nodes;
 
 	// extract base template name/index
 	enforcep(nodes[0].isTextNode, "'extends' cannot contain children or interpolations.", nodes[0].loc);
@@ -528,16 +533,45 @@ private struct BlockInfo {
 
 private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string] blocks)
 {
+	import std.algorithm.iteration : map;
+	import std.array : array;
+
 	string indent_style;
 	auto loc = Location(files[file_index].name, 0);
 	int prevlevel = -1;
 	int skiplevel = int.max;
 	string input = files[file_index].contents;
 	Node[] ret;
+	// nested stack of nodes
+	// the first dimension is corresponds to indentation based nesting
+	// the second dimension is for in-line nested nodes
 	Node[][] stack;
 	stack.length = 8;
 	bool prev_was_include = false;
 	bool is_extension = false;
+
+	void unwind(int level)
+	{
+		foreach_reverse (l; level .. prevlevel+1) {
+			Node hnode = stack[l][$-1];
+
+			if (hnode.name.startsWith("!block-")) {
+				string bname = hnode.name[7 .. $];
+				auto pb = bname in blocks;
+				assert(pb is null || pb.mode != BlockInfo.Mode.replace, "Block with replace mode on stack!?");
+
+				void addToBlockParent(Node[] contents) {
+					if (l == 0) ret ~= contents;
+					else stack[l-1][$-1].contents ~= contents.map!(n => NodeContent.tag(n)).array;
+				}
+
+				if (l+1 <= prevlevel)
+					addToBlockParent(stack[l+1]);
+				if (pb && pb.mode == BlockInfo.Mode.append)
+					addToBlockParent(pb.contents);
+			}
+		}
+	}
 
 	next_line:
 	while (input.length) {
@@ -562,6 +596,10 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 		string textindent;
 		if (indent_style.length) {
 			while (indent.startsWith(indent_style)) {
+				if (level >= skiplevel) {
+					skipLine(input, loc);
+					continue next_line;
+				}
 				if (level > prevlevel) {
 					enforcep((pnode.attribs & (NodeAttribs.textNode|NodeAttribs.rawTextNode)) != 0,
 						prev_was_include ? "Includes cannot have children." : "Line is indented too deeply.", loc);
@@ -571,10 +609,6 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 				}
 				level++;
 				indent = indent[indent_style.length .. $];
-				if (level > skiplevel) {
-					skipLine(input, loc);
-					continue next_line;
-				}
 			}
 		}
 		enforcep(indent.length == 0, "Mismatched indentation style.", loc);
@@ -602,6 +636,9 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 		// parse the line and write it to the stack:
 
 		if (stack.length < level+1) stack.length = level+1;
+
+		// finalize stack elements that are going to get overwritten
+		unwind(level);
 
 		if (input.startsWith("include ")) {
 			prev_was_include = true;
@@ -635,29 +672,27 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 		} else prev_was_include = false;
 
 		if (input.startsWith("block ") && !is_extension) {
-			import std.algorithm.comparison : among;
 			input = input[6 .. $];
-
 			auto tmploc = loc;
 			auto name = skipLine(input, tmploc).ctstrip;
-			int mode = -1;
 
 			if (auto pb = name in blocks) {
-				mode = pb.mode;
-				if (pb.mode.among(BlockInfo.Mode.prepend, BlockInfo.Mode.replace)) {
-					import std.algorithm : map;
-					import std.array : array;
+				if (pb.mode != BlockInfo.Mode.append) {
 					if (level == 0) ret ~= pb.contents;
 					else stack[level-1][$-1].contents ~= pb.contents.map!(n => NodeContent.tag(n)).array;
 				}
 
-				assert(pb.mode.among(BlockInfo.Mode.replace, BlockInfo.mode.append) >= 0, "Prepend block mode not yet supported.");
+				if (pb.mode == BlockInfo.Mode.replace) {
+					// ignore any children of the "block" node
+					skiplevel = level;
+					continue;
+				}
 			}
 
-			if (mode != BlockInfo.Mode.replace) {
-				// append children of 'block' to its parent
-				stack[level] = stack[level-1];
-			} else skiplevel = level;
+			// Put a "!block" node on the stack that is processed when
+			// the stack is unwound. This will add the children and/or
+			// the block contents in case of append/prepend block mode.
+			stack[level] = [new Node(loc, "!block-"~name)];
 			prevlevel = level;
 			continue;
 		}
@@ -693,6 +728,8 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 		// remember the nesting level for the next line
 		prevlevel = level;
 	}
+
+	unwind(0);
 
 	return ret;
 }
