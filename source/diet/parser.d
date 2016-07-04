@@ -172,6 +172,9 @@ unittest { // test basic functionality
 	assert(parseDiet("<inline>") == [
 		new Node(ln(0), "|", null, [NodeContent.text("<inline>", ln(0))])
 	]);
+	assert(parseDiet("|text") == [
+		new Node(ln(0), "|", null, [NodeContent.text("text", ln(0))])
+	], text(parseDiet("|text")));
 
 	// nested nodes
 	assert(parseDiet("a: b") == [
@@ -796,6 +799,9 @@ private Node parseTagLine(ref string input, ref Location loc, out bool has_neste
 		if (idx < input.length && input[idx] == ' ') {
 			// parse the rest of the line as text contents (if any non-ws)
 			input = input[idx+1 .. $];
+			parseTextLine(input, ret, loc);
+		} else if (ret.name == "|") {
+			// allow omitting the whitespace for "|" text nodes
 			parseTextLine(input, ret, loc);
 		} else {
 			import std.string : strip;
