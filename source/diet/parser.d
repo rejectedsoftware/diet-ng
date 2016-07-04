@@ -72,6 +72,20 @@ unittest { // test basic functionality
 		])
 	]);
 
+	// empty tag name (only class)
+	assert(parseDiet(".foo") == [
+		new Node(ln(0), "", [
+			Attribute("class", [AttributeContent.text("foo")])
+		])
+	]);
+
+	// empty tag name (only id)
+	assert(parseDiet("#foo") == [
+		new Node(ln(0), "", [
+			Attribute("id", [AttributeContent.text("foo")])
+		])
+	]);
+
 	// node with attributes
 	assert(parseDiet("test(foo1=\"bar\", foo2=2+3)") == [
 		new Node(ln(0), "test", [
@@ -677,7 +691,7 @@ private Node parseTagLine(ref string input, ref Location loc, out bool has_neste
 		ret.name = "|";
 	} else if (input.startsWith("<")) { // inline HTML/XML
 		ret.name = "|";
-	} else {
+	} else if (!input.startsWith('.') && !input.startsWith("#")) {
 		ret.name = skipIdent(input, idx, ":-_", loc);
 		// a trailing ':' is not part of the tag name, but signals a nested node
 		if (ret.name.endsWith(":")) {
