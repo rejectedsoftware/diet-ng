@@ -75,6 +75,8 @@ unittest {
 	test!"div(*ngFor=\"\\#item of list\")"(
 		"<div *ngFor=\"#item of list\"></div>"
 	);
+	test!".foo"("<div class=\"foo\"></div>");
+	test!"#foo"("<div id=\"foo\"></div>");
 }
 
 private string getHTMLMixin(ref CTX ctx, in Node node)
@@ -99,7 +101,8 @@ private string getElementMixin(ref CTX ctx, in Node node)
 	import std.algorithm : countUntil;
 
 	// write tag name
-	string ret = ctx.rawText(node.loc, "<"~node.name);
+	string tagname = node.name.length ? node.name : "div";
+	string ret = ctx.rawText(node.loc, "<"~tagname);
 
 	bool had_class = false;
 
@@ -180,7 +183,7 @@ private string getElementMixin(ref CTX ctx, in Node node)
 	ctx.depth--;
 
 	// write end tag
-	ret ~= ctx.rawText(node.loc, "</"~node.name~">");
+	ret ~= ctx.rawText(node.loc, "</"~tagname~">");
 
 	return ret;
 }
