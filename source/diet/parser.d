@@ -123,7 +123,14 @@ unittest { // test basic functionality
 		new Node(ln(0), "foo", null, [
 			NodeContent.interpolation(`1+2`, ln(0)),
 		])
-	], text(parseDiet("foo= 1+2")));
+	]);
+
+	// expression with empty tag name
+	assert(parseDiet("= 1+2") == [
+		new Node(ln(0), "", null, [
+			NodeContent.interpolation(`1+2`, ln(0)),
+		])
+	]);
 
 	// raw expression
 	assert(parseDiet("foo!= 1+2") == [
@@ -155,7 +162,7 @@ unittest { // test basic functionality
 	// special nodes
 	assert(parseDiet("//comment") == [
 		new Node(ln(0), "//", null, [NodeContent.text("comment", ln(0))], NodeAttribs.rawTextNode)
-	], text(parseDiet("//comment")));
+	]);
 	assert(parseDiet("//-hide") == [
 		new Node(ln(0), "//-", null, [NodeContent.text("hide", ln(0))], NodeAttribs.rawTextNode)
 	]);
@@ -307,7 +314,7 @@ unittest { // test expected errors
 		} catch (DietParserException ex) assert(ex.msg == msg, "Unexpected error message: "~ex.msg);
 	}
 
-	testFail("+test", "Expected identifier but got '+'.");
+	testFail("+test", "Expected node text separated by a space character or end of line, but got '+test'.");
 	testFail("  test", "First node must not be indented.");
 	testFail("test\n  test\n\ttest", "Mismatched indentation style.");
 	testFail("test\n\ttest\n\t\t\ttest", "Line is indented too deeply.");
@@ -684,44 +691,46 @@ private Node parseTagLine(ref string input, ref Location loc, out bool has_neste
 	ret.loc = loc;
 
 	if (input.startsWith("!!! ")) { // legacy doctype support
-		input = input[3 .. $];
+		input = input[4 .. $];
 		ret.name = "doctype";
-	} else if (input.startsWith("|")) { // text line
+		parseTextLine(input, ret, loc);
+		return ret;
+	} else if (input.startsWith('|')) { // text line
 		input = input[1 .. $];
 		ret.name = "|";
-	} else if (input.startsWith("<")) { // inline HTML/XML
+	} else if (input.startsWith('<')) { // inline HTML/XML
 		ret.name = "|";
-	} else if (!input.startsWith('.') && !input.startsWith("#")) {
-		ret.name = skipIdent(input, idx, ":-_", loc);
+		parseTextLine(input, ret, loc);
+		return ret;
+	} else {
+		ret.name = skipIdent(input, idx, ":-_", loc, true);
 		// a trailing ':' is not part of the tag name, but signals a nested node
 		if (ret.name.endsWith(":")) {
 			ret.name = ret.name[0 .. $-1];
 			idx--;
-		}
-	}
+		} else {
+			// node ID
+			if (idx < input.length && input[idx] == '#') {
+				idx++;
+				auto value = skipIdent(input, idx, "-_", loc);
+				enforcep(value.length > 0, "Expected id.", loc);
+				ret.attributes ~= Attribute("id", [AttributeContent(AttributeContent.Kind.text, value)]);
+			}
 
-	if (ret.name != "|") {
-		// node ID
-		if (idx < input.length && input[idx] == '#') {
-			idx++;
-			auto value = skipIdent(input, idx, "-_", loc);
-			enforcep(value.length > 0, "Expected id.", loc);
-			ret.attributes ~= Attribute("id", [AttributeContent(AttributeContent.Kind.text, value)]);
-		}
+			// node classes
+			while (idx < input.length && input[idx] == '.') {
+				if (idx+1 >= input.length || input[idx+1].isWhite)
+					goto textBlock;
+				idx++;
+				auto value = skipIdent(input, idx, "-_", loc);
+				enforcep(value.length > 0, "Expected class name identifier.", loc);
+				ret.attributes ~= Attribute("class", [AttributeContent(AttributeContent.Kind.text, value)]);
+			}
 
-		// node classes
-		while (idx < input.length && input[idx] == '.') {
-			if (idx+1 >= input.length || input[idx+1].isWhite)
-				goto textBlock;
-			idx++;
-			auto value = skipIdent(input, idx, "-_", loc);
-			enforcep(value.length > 0, "Expected class name identifier.", loc);
-			ret.attributes ~= Attribute("class", [AttributeContent(AttributeContent.Kind.text, value)]);
+			// generic attributes
+			if (idx < input.length && input[idx] == '(')
+				parseAttributes(input, idx, ret, loc);
 		}
-
-		// generic attributes
-		if (idx < input.length && input[idx] == '(')
-			parseAttributes(input, idx, ret, loc);
 	}
 
 	if (idx < input.length && input[idx] == '&') { ret.attribs |= NodeAttribs.translated; idx++; }
@@ -761,11 +770,18 @@ private Node parseTagLine(ref string input, ref Location loc, out bool has_neste
 		}
 		input = input[idx .. $];
 	} else {
-		input = input[idx .. $];
+		if (idx < input.length && input[idx] == ' ') {
+			// parse the rest of the line as text contents (if any non-ws)
+			input = input[idx+1 .. $];
+			parseTextLine(input, ret, loc);
+		} else {
+			import std.string : strip;
 
-		// parse the rest of the line as text contents (if any non-ws)
-		parseTextLine(input, ret, loc);
-		ret.stripLeadingWhitespace();
+			auto remainder = skipLine(input, idx, loc);
+			input = input[idx .. $];
+			enforcep(remainder.strip().length == 0,
+				"Expected node text separated by a space character or end of line, but got '"~remainder~"'.", loc);
+		}
 	}
 
 	return ret;
@@ -983,7 +999,7 @@ private string skipUntilClosingBracket(in ref string s, ref size_t idx, in ref L
 	assert(false);
 }
 
-private string skipIdent(in ref string s, ref size_t idx, string additional_chars, in ref Location loc)
+private string skipIdent(in ref string s, ref size_t idx, string additional_chars, in ref Location loc, bool accept_empty = false)
 {
 	import std.ascii : isAlpha;
 
@@ -1000,7 +1016,7 @@ private string skipIdent(in ref string s, ref size_t idx, string additional_char
 					break;
 				}
 			if (!found) {
-				enforcep(start != idx, "Expected identifier but got '"~s[idx]~"'.", loc);
+				enforcep(accept_empty || start != idx, "Expected identifier but got '"~s[idx]~"'.", loc);
 				return s[start .. idx];
 			}
 		}
