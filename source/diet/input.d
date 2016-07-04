@@ -18,8 +18,6 @@ template collectFiles(string root_file)
 	import std.algorithm.searching : canFind;
 	enum contents = import(root_file);
 	enum baseFiles = collectReferencedFiles!contents;
-	pragma(msg, "references for "~root_file~": ");
-	import std.algorithm.iteration : map; import std.array : array; pragma(msg, baseFiles.map!(f => f.name).array);
 	static if (baseFiles.canFind!(f => f.name == root_file))
 		enum collectFiles = baseFiles;
 	else enum collectFiles = InputFile(root_file, contents) ~ baseFiles;
