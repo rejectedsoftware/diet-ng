@@ -488,22 +488,22 @@ private Node[] parseDietWithExtensions(InputFile[] files, size_t file_index, Blo
 
 	// collect all blocks
 	foreach (n; nodes[1 .. $]) {
-		int mode;
+		BlockInfo.Mode mode;
 		switch (n.name) {
 			default:
 				enforcep(false, "Extension templates may only contain blocks definitions at the root level.", n.loc);
 				break;
-			case "block": mode = 0; break;
-			case "prepend": mode = -1; break;
-			case "append": mode = 1; break;
+			case "block": mode = BlockInfo.Mode.replace; break;
+			case "prepend": mode = BlockInfo.Mode.prepend; break;
+			case "append": mode = BlockInfo.Mode.append; break;
 		}
 		enforcep(n.contents.length > 0 && n.contents[0].kind == NodeContent.Kind.text,
 			"'block' must have a name.", n.loc);
 		auto name = n.contents[0].value.ctstrip;
 		auto contents = n.contents[1 .. $].filter!(n => n.kind == NodeContent.Kind.node).map!(n => n.node).array;
 		if (auto pb = name in blocks) {
-			if (pb.mode == -1) pb.contents = pb.contents ~ contents;
-			else if (pb.mode == 1) pb.contents = contents ~ pb.contents;
+			if (pb.mode == BlockInfo.Mode.prepend) pb.contents = pb.contents ~ contents;
+			else if (pb.mode == BlockInfo.Mode.append) pb.contents = contents ~ pb.contents;
 			else continue;
 			pb.mode = mode;
 		} else blocks[name] = BlockInfo(mode, contents);
@@ -514,7 +514,12 @@ private Node[] parseDietWithExtensions(InputFile[] files, size_t file_index, Blo
 }
 
 private struct BlockInfo {
-	int mode = 0; // -1: prepend, 0: replace, 1: append
+	enum Mode {
+		prepend,
+		replace,
+		append
+	}
+	Mode mode = Mode.replace;
 	Node[] contents;
 }
 
@@ -627,6 +632,7 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 		} else prev_was_include = false;
 
 		if (input.startsWith("block ") && !is_extension) {
+			import std.algorithm.comparison : among;
 			input = input[6 .. $];
 
 			auto tmploc = loc;
@@ -635,17 +641,17 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 
 			if (auto pb = name in blocks) {
 				mode = pb.mode;
-				if (pb.mode <= 0) {
+				if (pb.mode.among(BlockInfo.Mode.prepend, BlockInfo.Mode.replace)) {
 					import std.algorithm : map;
 					import std.array : array;
 					if (level == 0) ret ~= pb.contents;
 					else stack[level-1][$-1].contents ~= pb.contents.map!(n => NodeContent.tag(n)).array;
 				}
 
-				assert(pb.mode <= 0, "Prepend block mode not yet supported.");
+				assert(pb.mode.among(BlockInfo.Mode.replace, BlockInfo.mode.append) >= 0, "Prepend block mode not yet supported.");
 			}
 
-			if (mode != 0) {
+			if (mode != BlockInfo.Mode.replace) {
 				// append children of 'block' to its parent
 				stack[level] = stack[level-1];
 			} else skiplevel = level;
