@@ -195,6 +195,17 @@ unittest { // test basic functionality
 			NodeContent.tag(new Node(ln(0), "b"))
 		])
 	]);
+
+	// whitespace fitting
+	assert(parseDiet("a<>") == [
+		new Node(ln(0), "a", null, [], NodeAttribs.fitInside|NodeAttribs.fitOutside)
+	]);
+	assert(parseDiet("a<") == [
+		new Node(ln(0), "a", null, [], NodeAttribs.fitInside)
+	]);
+	assert(parseDiet("a>") == [
+		new Node(ln(0), "a", null, [], NodeAttribs.fitOutside)
+	]);
 }
 
 unittest {
@@ -726,6 +737,16 @@ private Node parseTagLine(ref string input, ref Location loc, out bool has_neste
 			// generic attributes
 			if (idx < input.length && input[idx] == '(')
 				parseAttributes(input, idx, ret, loc);
+
+			if (idx < input.length && input[idx] == '<') {
+				idx++;
+				ret.attribs |= NodeAttribs.fitInside;
+			}
+
+			if (idx < input.length && input[idx] == '>') {
+				idx++;
+				ret.attribs |= NodeAttribs.fitOutside;
+			}
 		}
 	}
 
