@@ -113,11 +113,11 @@ unittest { // test basic functionality
 	]);
 
 	// interpolated text
-	assert(parseDiet("foo hello #{\"world\"} #bar") == [
+	assert(parseDiet("foo hello #{\"world\"} #bar \\#{baz}") == [
 		new Node(ln(0), "foo", null, [
 			NodeContent.text("hello ", ln(0)),
 			NodeContent.interpolation(`"world"`, ln(0)),
-			NodeContent.text(" #bar", ln(0))
+			NodeContent.text(" #bar #{baz}", ln(0))
 		])
 	]);
 
@@ -863,6 +863,8 @@ private Node parseTagLine(ref string input, ref Location loc, out bool has_neste
 */
 private void parseTextLine(ref string input, ref Node dst, ref Location loc)
 {
+	import std.algorithm.comparison : among;
+
 	size_t sidx = 0, idx = 0;
 
 	void flushText()
@@ -874,6 +876,13 @@ private void parseTextLine(ref string input, ref Node dst, ref Location loc)
 		char cur = input[idx];
 		switch (cur) {
 			default: idx++; break;
+			case '\\':
+				if (idx+1 < input.length && input[idx+1].among('#', '!')) {
+					flushText();
+					sidx = idx+1;
+					idx += 2;
+				} else idx++;
+				break;
 			case '!', '#':
 				if (idx+1 < input.length && input[idx+1] == '{') {
 					flushText();
