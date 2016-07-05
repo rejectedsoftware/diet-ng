@@ -520,7 +520,7 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, Bloc
 				default:
 					enforcep(false, "Extension templates may only contain blocks definitions at the root level.", n.loc);
 					break;
-				case "//": continue; // also allow comments at the root level
+				case "//", "//-": continue; // also allow comments at the root level
 				case "block": mode = BlockInfo.Mode.replace; break;
 				case "prepend": mode = BlockInfo.Mode.prepend; break;
 				case "append": mode = BlockInfo.Mode.append; break;
