@@ -98,12 +98,12 @@ unittest { // test basic functionality
 	]);
 
 	// node with pure text contents
-	assert(parseDiet("foo.\n  hello\n      world") == [
+	assert(parseDiet("foo.\n\thello\n\t   world") == [
 		new Node(ln(0), "foo", null, [
 			NodeContent.text("hello", ln(1)),
-			NodeContent.text("\n    world", ln(2))
+			NodeContent.text("\n   world", ln(2))
 		], NodeAttribs.textNode)
-	]);
+	], text(parseDiet("foo.\n\thello\n\t   world")));
 
 	// translated text
 	assert(parseDiet("foo& test") == [
@@ -659,22 +659,20 @@ private Node[] parseDietRaw(InputFile file)
 		if (indent.length && !indent_style.length) indent_style = indent;
 
 		// determine nesting level
+		bool is_text_line = pnode && (pnode.attribs & (NodeAttribs.textNode|NodeAttribs.rawTextNode)) != 0;
 		int level = 0;
-		string textindent;
 		if (indent_style.length) {
 			while (indent.startsWith(indent_style)) {
 				if (level > prevlevel) {
-					enforcep((pnode.attribs & (NodeAttribs.textNode|NodeAttribs.rawTextNode)) != 0,
-						"Line is indented too deeply.", loc);
-					textindent = indent;
-					indent = null;
+					enforcep(is_text_line, "Line is indented too deeply.", loc);
 					break;
 				}
 				level++;
 				indent = indent[indent_style.length .. $];
 			}
 		}
-		enforcep(indent.length == 0, "Mismatched indentation style.", loc);
+
+		enforcep(is_text_line || indent.length == 0, "Mismatched indentation style.", loc);
 
 		// read the whole line as text if the parent node is a pure text node
 		// ("." suffix) or pure raw text node (e.g. comments)
@@ -682,13 +680,13 @@ private Node[] parseDietRaw(InputFile file)
 			if (pnode.attribs & NodeAttribs.textNode) {
 				if (!pnode.contents.empty)
 					pnode.addText("\n", loc);
-				if (textindent.length) pnode.addText(textindent, loc);
+				if (indent.length) pnode.addText(indent, loc);
 				parseTextLine(input, pnode, loc);
 				continue;
 			} else if (pnode.attribs & NodeAttribs.rawTextNode) {
 				if (!pnode.contents.empty)
 					pnode.addText("\n", loc);
-				if (textindent.length) pnode.addText(textindent, loc);
+				if (indent.length) pnode.addText(indent, loc);
 				auto tmploc = loc;
 				pnode.addText(skipLine(input, loc), tmploc);
 				continue;
