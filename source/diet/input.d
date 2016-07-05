@@ -16,7 +16,7 @@ module diet.input;
 template collectFiles(string root_file)
 {
 	import std.algorithm.searching : canFind;
-	enum contents = import(root_file);
+	enum contents = stripUTF8BOM(import(root_file));
 	enum baseFiles = collectReferencedFiles!contents;
 	static if (baseFiles.canFind!(f => f.name == root_file))
 		enum collectFiles = baseFiles;
@@ -89,4 +89,11 @@ template localAliases(int i, ALIASES...)
 	} else {
 		enum string localAliases = "";
 	}
+}
+
+private string stripUTF8BOM(string input)
+{
+	if (input.length >= 3 && input[0 .. 3] == [0xEF, 0xBB, 0xBF])
+		return input[3 .. $];
+	return input;
 }
