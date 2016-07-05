@@ -177,7 +177,10 @@ unittest { // test basic functionality
 	]);
 	assert(parseDiet("|text") == [
 		new Node(ln(0), "|", null, [NodeContent.text("text", ln(0))])
-	], text(parseDiet("|text")));
+	]);
+	assert(parseDiet("-if(x)") == [
+		new Node(ln(0), "-", null, [NodeContent.text("if(x)", ln(0))])
+	]);
 
 	// nested nodes
 	assert(parseDiet("a: b") == [
@@ -507,7 +510,7 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, Bloc
 		enforcep(nodes[0].attributes.length == 0, "'extends' cannot have attributes.", nodes[0].loc);
 
 		string base_template = nodes[0].contents[0].value.ctstrip;
-		auto base_idx = files.countUntil!(f => f.name.stripExtension == base_template);
+		auto base_idx = files.countUntil!(f => matchesName(f.name, base_template));
 		assert(base_idx >= 0, "Missing base template: "~base_template);
 
 		// collect all blocks
@@ -582,7 +585,7 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, Bloc
 		} else if (n.name == "include") {
 			auto name = extractFilename(n);
 			enforcep(n.contents.length == 1, "Includes cannot have children.", n.loc);
-			auto fidx = files.countUntil!(f => stripExtension(f.name) == stripExtension(name));
+			auto fidx = files.countUntil!(f => matchesName(f.name, name));
 			enforcep(fidx >= 0, "Missing include input file: "~name, n.loc);
 			insert(parseDietWithExtensions(files, fidx, null, import_stack ~ file_index));
 		} else {
@@ -710,6 +713,15 @@ private Node[] parseDietRaw(InputFile file)
 			if (input[2 .. $].startsWith("-")) { n.name = "//-"; input = input[3 .. $]; }
 			else { n.name = "//"; input = input[2 .. $]; }
 			n.attribs |= NodeAttribs.rawTextNode;
+			auto tmploc = loc;
+			n.addText(skipLine(input, loc), tmploc);
+			stack[level] = [n];
+		} else if (input.startsWith('-')) {
+			// D statements
+			input = input[1 .. $];
+			auto n = new Node;
+			n.loc = loc;
+			n.name = "-";
 			auto tmploc = loc;
 			n.addText(skipLine(input, loc), tmploc);
 			stack[level] = [n];
@@ -1212,6 +1224,13 @@ private string skipAttribString(in ref string s, ref size_t idx, char delimiter,
 	}
 	enforcep(idx < s.length, "Unterminated attribute string: "~s[start-1 .. $]~"||", loc);
 	return s[start .. idx];
+}
+
+private bool matchesName(string filename, string logical_name)
+{
+	if (filename == logical_name) return true;
+	if (filename.endsWith(".dt") && filename[0 .. $-3] == logical_name) return true;
+	return false;
 }
 
 private void modifyArray(alias modify, T)(ref T[] arr)
