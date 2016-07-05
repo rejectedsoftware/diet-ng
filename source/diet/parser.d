@@ -429,6 +429,12 @@ unittest { // test CTFE-ability
 	static assert(result.length == 1);
 }
 
+unittest { // UTF-8 BOM
+	assert(parseDiet([InputFile("main.dt", "\xEF\xBB\xBFhtml")]) == [
+		new Node(Location("main.dt", 0), "html", null, null)
+	]);
+}
+
 private string parseIdent(in ref string str, ref size_t start,
 	   	string breakChars, in ref Location loc)
 {
@@ -549,6 +555,9 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 	stack.length = 8;
 	bool prev_was_include = false;
 	bool is_extension = false;
+
+	if (input.length >= 3 && input[0 .. 3] == [0xEF, 0xBB, 0xBF])
+		input = input[3 .. $];
 
 	void unwind(int level)
 	{
