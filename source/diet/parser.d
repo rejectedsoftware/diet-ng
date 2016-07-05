@@ -43,7 +43,10 @@ Node[] parseDiet(string text, string filename = "string")
 
 Node[] parseDiet(InputFile[] files)
 {
-	return parseDietWithExtensions(files, 0, null);
+	import std.algorithm.iteration : map;
+	import std.array : array;
+	FileInfo[] parsed_files = files.map!(f => FileInfo(f.name, parseDietRaw(f))).array;
+	return parseDietWithExtensions(parsed_files, 0, null, null);
 }
 
 unittest { // test basic functionality
@@ -358,7 +361,7 @@ unittest { // includes
 	assert(parse("include inc") == [
 		new Node(Location("inc.dt", 0), "p", null, null)
 	]);
-	testFail("include main", "Recursive include.");
+	testFail("include main", "Dependency cycle detected for this module.");
 	testFail("include inc2", "Missing include input file: inc2");
 	testFail("include #{p}", "Dynamic includes are not supported.");
 	testFail("include inc\n\tp", "Includes cannot have children.");
@@ -485,46 +488,125 @@ private string parseIdent(in ref string str, ref size_t start,
 	assert(false);
 }
 
-private Node[] parseDietWithExtensions(InputFile[] files, size_t file_index, BlockInfo[string] blocks)
+private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, BlockInfo[string] blocks, size_t[] import_stack)
 {
-	import std.algorithm : countUntil, filter, map;
+	import std.algorithm : all, canFind, countUntil, filter, map;
 	import std.array : array;
 	import std.path : stripExtension;
+	import std.typecons : Nullable;
 
-	auto nodes = parseDiet(files, file_index, blocks);
-	if (!nodes.length || nodes[0].name != "extends") return nodes;
+	auto floc = Location(files[file_index].name, 0);
+	enforcep(!import_stack.canFind(file_index), "Dependency cycle detected for this module.", floc);
 
-	// extract base template name/index
-	enforcep(nodes[0].isTextNode, "'extends' cannot contain children or interpolations.", nodes[0].loc);
-	string base_template = nodes[0].contents[0].value.ctstrip;
-	auto base_idx = files.countUntil!(f => f.name.stripExtension == base_template);
-	assert(base_idx >= 0, "Missing base template: "~base_template);
+	auto nodes = files[file_index].nodes;
+	if (!nodes.length) return null;
 
-	// collect all blocks
-	foreach (n; nodes[1 .. $]) {
-		BlockInfo.Mode mode;
-		switch (n.name) {
-			default:
-				enforcep(false, "Extension templates may only contain blocks definitions at the root level.", n.loc);
-				break;
-			case "block": mode = BlockInfo.Mode.replace; break;
-			case "prepend": mode = BlockInfo.Mode.prepend; break;
-			case "append": mode = BlockInfo.Mode.append; break;
+	if (nodes[0].name == "extends") {
+		// extract base template name/index
+		enforcep(nodes[0].isTextNode, "'extends' cannot contain children or interpolations.", nodes[0].loc);
+		enforcep(nodes[0].attributes.length == 0, "'extends' cannot have attributes.", nodes[0].loc);
+
+		string base_template = nodes[0].contents[0].value.ctstrip;
+		auto base_idx = files.countUntil!(f => f.name.stripExtension == base_template);
+		assert(base_idx >= 0, "Missing base template: "~base_template);
+
+		// collect all blocks
+		foreach (n; nodes[1 .. $]) {
+			BlockInfo.Mode mode;
+			switch (n.name) {
+				default:
+					enforcep(false, "Extension templates may only contain blocks definitions at the root level.", n.loc);
+					break;
+				case "//": continue; // also allow comments at the root level
+				case "block": mode = BlockInfo.Mode.replace; break;
+				case "prepend": mode = BlockInfo.Mode.prepend; break;
+				case "append": mode = BlockInfo.Mode.append; break;
+			}
+			enforcep(n.contents.length > 0 && n.contents[0].kind == NodeContent.Kind.text,
+				"'block' must have a name.", n.loc);
+			auto name = n.contents[0].value.ctstrip;
+			auto contents = n.contents[1 .. $].filter!(n => n.kind == NodeContent.Kind.node).map!(n => n.node).array;
+			if (auto pb = name in blocks) {
+				if (pb.mode == BlockInfo.Mode.prepend) pb.contents = pb.contents ~ contents;
+				else if (pb.mode == BlockInfo.Mode.append) pb.contents = contents ~ pb.contents;
+				else continue;
+				pb.mode = mode;
+			} else blocks[name] = BlockInfo(mode, contents);
 		}
-		enforcep(n.contents.length > 0 && n.contents[0].kind == NodeContent.Kind.text,
-			"'block' must have a name.", n.loc);
-		auto name = n.contents[0].value.ctstrip;
-		auto contents = n.contents[1 .. $].filter!(n => n.kind == NodeContent.Kind.node).map!(n => n.node).array;
-		if (auto pb = name in blocks) {
-			if (pb.mode == BlockInfo.Mode.prepend) pb.contents = pb.contents ~ contents;
-			else if (pb.mode == BlockInfo.Mode.append) pb.contents = contents ~ pb.contents;
-			else continue;
-			pb.mode = mode;
-		} else blocks[name] = BlockInfo(mode, contents);
+
+		// parse base template
+		return parseDietWithExtensions(files, base_idx, blocks, import_stack ~ file_index);
 	}
 
-	// parse base template
-	return parseDietWithExtensions(files, base_idx, blocks);
+	static string extractFilename(Node n)
+	{
+		enforcep(n.contents.length >= 1 && n.contents[0].kind != NodeContent.Kind.node,
+			"Missing block name.", n.loc);
+		enforcep(n.contents[0].kind == NodeContent.Kind.text,
+			"Dynamic includes are not supported.", n.loc);
+		enforcep(n.contents.length == 1 || n.contents[1 .. $].all!(nc => nc.kind == NodeContent.Kind.node),
+			"'"~n.name~"' must only contain a block name and child nodes.", n.loc);
+		enforcep(n.attributes.length == 0, "'"~n.name~"' cannot have attributes.", n.loc);
+		return n.contents[0].value.ctstrip;
+	}
+
+	Nullable!(Node[]) processNode(Node n) {
+		Nullable!(Node[]) ret;
+
+		void insert(Node[] nodes) {
+			foreach (i, n; nodes) {
+				auto np = processNode(n);
+				if (!np.isNull()) {
+					if (ret.isNull) ret = nodes[0 .. i];
+					ret ~= np;
+				} else if (!ret.isNull) ret ~= n;
+			}
+			if (ret.isNull && nodes.length) ret = nodes;
+		}
+
+		if (n.name == "block") {
+			auto name = extractFilename(n);
+			auto pb = name in blocks;
+
+			if (pb && pb.mode == BlockInfo.Mode.prepend)
+				insert(pb.contents);
+			if (!pb || pb.mode != BlockInfo.Mode.replace)
+				insert(n.contents[1 .. $].map!((nc) {
+					assert(nc.kind == NodeContent.Kind.node, "Block contains non-node child!?");
+					return nc.node;
+				}).array);
+			if (pb && pb.mode != BlockInfo.Mode.prepend)
+				insert(pb.contents);
+
+			if (ret.isNull) ret = [];
+		} else if (n.name == "include") {
+			auto name = extractFilename(n);
+			enforcep(n.contents.length == 1, "Includes cannot have children.", n.loc);
+			auto fidx = files.countUntil!(f => stripExtension(f.name) == stripExtension(name));
+			enforcep(fidx >= 0, "Missing include input file: "~name, n.loc);
+			insert(parseDietWithExtensions(files, fidx, null, import_stack ~ file_index));
+		} else {
+			n.contents.modifyArray!((nc) {
+				Nullable!(NodeContent[]) rn;
+				if (nc.kind == NodeContent.Kind.node) {
+					auto mod = processNode(nc.node);
+					if (!mod.isNull()) rn = mod.map!(n => NodeContent.tag(n)).array;
+				}
+				assert(rn.isNull || rn.get.all!(n => n.node.name != "block"));
+				return rn;
+			});
+		}
+
+		assert(ret.isNull || ret.get.all!(n => n.name != "block"));
+
+		return ret;
+	}
+
+	nodes.modifyArray!(processNode);
+
+	assert(nodes.all!(n => n.name != "block"));
+
+	return nodes;
 }
 
 private struct BlockInfo {
@@ -537,50 +619,30 @@ private struct BlockInfo {
 	Node[] contents;
 }
 
-private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string] blocks)
+private struct FileInfo {
+	string name;
+	Node[] nodes;
+}
+
+private Node[] parseDietRaw(InputFile file)
 {
 	import std.algorithm.iteration : map;
 	import std.array : array;
 
 	string indent_style;
-	auto loc = Location(files[file_index].name, 0);
+	auto loc = Location(file.name, 0);
 	int prevlevel = -1;
-	int skiplevel = int.max;
-	string input = files[file_index].contents;
+	string input = file.contents;
 	Node[] ret;
 	// nested stack of nodes
 	// the first dimension is corresponds to indentation based nesting
 	// the second dimension is for in-line nested nodes
 	Node[][] stack;
 	stack.length = 8;
-	bool prev_was_include = false;
-	bool is_extension = false;
 
 	if (input.length >= 3 && input[0 .. 3] == [0xEF, 0xBB, 0xBF])
 		input = input[3 .. $];
 
-	void unwind(int level)
-	{
-		foreach_reverse (l; level .. prevlevel+1) {
-			Node hnode = stack[l][$-1];
-
-			if (hnode.name.startsWith("!block-")) {
-				string bname = hnode.name[7 .. $];
-				auto pb = bname in blocks;
-				assert(pb is null || pb.mode != BlockInfo.Mode.replace, "Block with replace mode on stack!?");
-
-				void addToBlockParent(Node[] contents) {
-					if (l == 0) ret ~= contents;
-					else stack[l-1][$-1].contents ~= contents.map!(n => NodeContent.tag(n)).array;
-				}
-
-				if (l+1 <= prevlevel)
-					addToBlockParent(stack[l+1]);
-				if (pb && pb.mode == BlockInfo.Mode.append)
-					addToBlockParent(pb.contents);
-			}
-		}
-	}
 
 	next_line:
 	while (input.length) {
@@ -594,7 +656,7 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 		if (input.length == 0 || input[0] == '\n') { input.popFront(); loc.line++; continue; }
 		if (input[0] == '\r') { input.popFrontN(input.length >= 2 && input[1] == '\n' ? 2 : 1); loc.line++; continue; }
 
-		enforcep(prevlevel >= 0 || indent.length == 0, prev_was_include ? "Includes cannot have children." : "First node must not be indented.", loc);
+		enforcep(prevlevel >= 0 || indent.length == 0, "First node must not be indented.", loc);
 
 		// determine the indentation style (tabs/spaces) from the first indented
 		// line of the file
@@ -605,13 +667,9 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 		string textindent;
 		if (indent_style.length) {
 			while (indent.startsWith(indent_style)) {
-				if (level >= skiplevel) {
-					skipLine(input, loc);
-					continue next_line;
-				}
 				if (level > prevlevel) {
 					enforcep((pnode.attribs & (NodeAttribs.textNode|NodeAttribs.rawTextNode)) != 0,
-						prev_was_include ? "Includes cannot have children." : "Line is indented too deeply.", loc);
+						"Line is indented too deeply.", loc);
 					textindent = indent;
 					indent = null;
 					break;
@@ -621,7 +679,6 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 			}
 		}
 		enforcep(indent.length == 0, "Mismatched indentation style.", loc);
-		skiplevel = int.max; // reset skiplevel once a non-skipped node was encountered
 
 		// read the whole line as text if the parent node is a pure text node
 		// ("." suffix) or pure raw text node (e.g. comments)
@@ -646,66 +703,6 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 
 		if (stack.length < level+1) stack.length = level+1;
 
-		// finalize stack elements that are going to get overwritten
-		unwind(level);
-
-		if (input.startsWith("include ")) {
-			prev_was_include = true;
-			input = input[8 .. $];
-
-			auto tmploc = loc;
-			auto name = skipLine(input, tmploc).ctstrip;
-			Node[] incnodes;
-
-			if (name.startsWith("#{")) {
-				enforcep(false, "Dynamic includes are not supported.", tmploc);
-			} else {
-				import std.path : stripExtension;
-				// file include
-				size_t fi = size_t.max;
-				foreach (i, ref f; files)
-					if (f.name.stripExtension == name) {
-						fi = i;
-						break;
-					}
-				enforcep(fi != size_t.max, "Missing include input file: "~name, loc);
-				enforcep(fi != file_index, "Recursive include.", loc);
-
-				incnodes = parseDiet(files, fi, blocks);
-			}
-
-			if (level == 0) ret ~= incnodes;
-			else foreach (n; incnodes) stack[level-1][$-1].contents ~= NodeContent.tag(n);
-			prevlevel = level-1;
-			continue;
-		} else prev_was_include = false;
-
-		if (input.startsWith("block ") && !is_extension) {
-			input = input[6 .. $];
-			auto tmploc = loc;
-			auto name = skipLine(input, tmploc).ctstrip;
-
-			if (auto pb = name in blocks) {
-				if (pb.mode != BlockInfo.Mode.append) {
-					if (level == 0) ret ~= pb.contents;
-					else stack[level-1][$-1].contents ~= pb.contents.map!(n => NodeContent.tag(n)).array;
-				}
-
-				if (pb.mode == BlockInfo.Mode.replace) {
-					// ignore any children of the "block" node
-					skiplevel = level;
-					continue;
-				}
-			}
-
-			// Put a "!block" node on the stack that is processed when
-			// the stack is unwound. This will add the children and/or
-			// the block contents in case of append/prepend block mode.
-			stack[level] = [new Node(loc, "!block-"~name)];
-			prevlevel = level;
-			continue;
-		}
-
 		if (input.startsWith("//")) {
 			// comments
 			auto n = new Node;
@@ -722,10 +719,6 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 			stack[level] = null;
 			do stack[level] ~= parseTagLine(input, loc, has_nested);
 			while (has_nested);
-
-			// test if first node is an "extends" node
-			if (prevlevel < 0 && stack[level][0].name == "extends")
-				is_extension = true;
 		}
 
 		// add it to its parent contents
@@ -737,8 +730,6 @@ private Node[] parseDiet(InputFile[] files, size_t file_index, BlockInfo[string]
 		// remember the nesting level for the next line
 		prevlevel = level;
 	}
-
-	unwind(0);
 
 	return ret;
 }
@@ -1223,3 +1214,15 @@ private string skipAttribString(in ref string s, ref size_t idx, char delimiter,
 	return s[start .. idx];
 }
 
+private void modifyArray(alias modify, T)(ref T[] arr)
+{
+	size_t i = 0;
+	while (i < arr.length) {
+		auto mod = modify(arr[i]);
+		if (mod.isNull()) i++;
+		else {
+			arr = arr[0 .. i] ~ mod.get() ~ arr[i+1 .. $];
+			i += mod.length;
+		}
+	}
+}
