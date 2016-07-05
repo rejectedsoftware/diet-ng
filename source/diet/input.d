@@ -28,12 +28,14 @@ private template collectReferencedFiles(string file_contents)
 	enum references = collectReferences(file_contents);
 	template impl(size_t i) {
 		static if (i < references.length) {
-			static if (__traits(compiles, import(references[i])))
-				enum ifiles = collectFiles!(references[i]);
-			else
-				enum ifiles = collectFiles!(references[i] ~ ".dt");
 			enum rfiles = impl!(i+1);
-			enum impl = merge(ifiles, rfiles);
+			static if (__traits(compiles, import(references[i]))) {
+				enum ifiles = collectFiles!(references[i]);
+				enum impl = merge(ifiles, rfiles);
+			} else static if (__traits(compiles, import(references[i] ~ ".dt"))) {
+				enum ifiles = collectFiles!(references[i] ~ ".dt");
+				enum impl = merge(ifiles, rfiles);
+			} else enum impl = rfiles;
 		} else enum InputFile[] impl = [];
 	}
 	alias collectReferencedFiles = impl!0;
