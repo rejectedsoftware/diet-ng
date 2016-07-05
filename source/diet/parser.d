@@ -181,6 +181,9 @@ unittest { // test basic functionality
 	assert(parseDiet("-if(x)") == [
 		new Node(ln(0), "-", null, [NodeContent.text("if(x)", ln(0))])
 	]);
+	assert(parseDiet(":foo\n\tbar") == [
+		new Node(ln(0), ":foo", null, [NodeContent.text("bar", ln(1))], NodeAttribs.rawTextNode)
+	]);
 
 	// nested nodes
 	assert(parseDiet("a: b") == [
@@ -714,6 +717,20 @@ private Node[] parseDietRaw(InputFile file)
 			n.name = "-";
 			auto tmploc = loc;
 			n.addText(skipLine(input, loc), tmploc);
+			stack[level] = [n];
+		} else if (input.startsWith(':')) {
+			// filters
+			input = input[1 .. $];
+			size_t idx = 0;
+			auto fname = skipIdent(input, idx, "-_", loc);
+			input = input[idx .. $];
+			auto n = new Node;
+			n.loc = loc;
+			n.name = ":" ~ fname;
+			n.attribs = NodeAttribs.rawTextNode;
+			auto tmploc = loc;
+			auto trailing = skipLine(input, loc);
+			if (trailing.length) n.addText(trailing, tmploc);
 			stack[level] = [n];
 		} else {
 			// normal tag line
