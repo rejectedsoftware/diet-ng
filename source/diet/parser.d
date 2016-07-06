@@ -81,6 +81,17 @@ unittest { // test basic functionality
 			Attribute("class", [AttributeContent.text("foo")])
 		])
 	]);
+	assert(parseDiet("a.download-button\n\t.bs-hbtn.right.black") == [
+		new Node(ln(0), "a", [
+			Attribute("class", [AttributeContent.text("download-button")]),
+		], [
+			NodeContent.tag(new Node(ln(1), "", [
+				Attribute("class", [AttributeContent.text("bs-hbtn")]),
+				Attribute("class", [AttributeContent.text("right")]),
+				Attribute("class", [AttributeContent.text("black")])
+			]))
+		])
+	], text(parseDiet("a\n\t.bs-hbtn.right.black")));
 
 	// empty tag name (only id)
 	assert(parseDiet("#foo") == [
@@ -183,6 +194,13 @@ unittest { // test basic functionality
 	]);
 	assert(parseDiet(":foo\n\tbar") == [
 		new Node(ln(0), ":foo", null, [NodeContent.text("bar", ln(1))], NodeAttribs.rawTextNode)
+	]);
+	assert(parseDiet(":foo :bar baz") == [
+		new Node(ln(0), ":foo", null, [
+			NodeContent.tag(new Node(ln(0), ":bar", null, [
+				NodeContent.text("baz", ln(0))
+			], NodeAttribs.rawTextNode))
+		])
 	]);
 
 	// nested nodes
@@ -718,18 +736,26 @@ private Node[] parseDietRaw(InputFile file)
 			stack[level] = [n];
 		} else if (input.startsWith(':')) {
 			// filters
-			input = input[1 .. $];
-			size_t idx = 0;
-			auto fname = skipIdent(input, idx, "-_", loc);
-			input = input[idx .. $];
-			auto n = new Node;
-			n.loc = loc;
-			n.name = ":" ~ fname;
-			n.attribs = NodeAttribs.rawTextNode;
+			stack[level] = [];
+
+			do {
+				input = input[1 .. $];
+				size_t idx = 0;
+				auto fname = skipIdent(input, idx, "-_", loc);
+				input = input[idx .. $];
+
+				Node chn = new Node;
+				chn.loc = loc;
+				chn.name = ":" ~ fname;
+				stack[level] ~= chn;
+
+				if (input.startsWith(' ')) input = input[1 .. $];
+			} while (input.startsWith(':'));
+
+			stack[level][$-1].attribs = NodeAttribs.rawTextNode;
 			auto tmploc = loc;
 			auto trailing = skipLine(input, loc);
-			if (trailing.length) n.addText(trailing, tmploc);
-			stack[level] = [n];
+			if (trailing.length) stack[level][$-1].addText(trailing, tmploc);
 		} else {
 			// normal tag line
 			bool has_nested;
