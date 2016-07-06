@@ -15,8 +15,7 @@ template compileHTMLDietFile(string filename, ALIASES...)
 	void compileHTMLDietFile(R)(ref R _output_)
 	{
 		mixin(localAliases!(0, ALIASES));
-		alias files = collectFiles!filename;
-		//compileHTMLDietStrings!(files, ALIASES)(dst);
+		enum files = collectFiles!filename;
 		enum nodes = parseDiet(files);
 		//pragma(msg, getHTMLMixin(nodes));
 		mixin(getHTMLMixin(nodes));
@@ -91,6 +90,7 @@ private string getHTMLMixin(ref CTX ctx, in Node node)
 			string ret;
 			foreach (c; node.contents)
 				ret ~= ctx.getNodeContentsMixin(c);
+			ret ~= ctx.rawText(node.loc, "\n");
 			return ret;
 
 	}
@@ -135,14 +135,14 @@ private string getElementMixin(ref CTX ctx, in Node node)
 			ret ~= ctx.statement(node.loc, q{static if (is(typeof(%s) == bool)) }~'{', expr);
 			if (ctx.isHTML5) ret ~= ctx.statement(node.loc, q{if (%s) %s.put(" %s");}, expr, ctx.rangeName, att.name);
 			else ret ~= ctx.statement(node.loc, q{if (%s) %s.put(" %s=\"%s\"");}, expr, ctx.rangeName, att.name, att.name);
-			ret ~= ctx.statement(node.loc, "} else "~q{static if (is(typeof(%s) : const(char)[])) }~'{', expr);
+			ret ~= ctx.statement(node.loc, "} else "~q{static if (is(typeof(%s) : const(char)[])) }~"{{", expr);
 			ret ~= ctx.statement(node.loc, q{  auto val = %s;}, expr);
 			ret ~= ctx.statement(node.loc, q{  if (val !is null) }~'{');
 			ret ~= ctx.rawText(node.loc, " "~att.name~"=\"");
 			ret ~= ctx.statement(node.loc, q{    %s.filterHTMLAttribEscape(val);}, ctx.rangeName);
 			ret ~= ctx.rawText(node.loc, "\"");
 			ret ~= ctx.statement(node.loc, "  }");
-			ret ~= ctx.statement(node.loc, "} else {");
+			ret ~= ctx.statement(node.loc, "}} else {");
 		}
 
 		ret ~= ctx.rawText(node.loc, " "~att.name ~ "=\"");
