@@ -361,6 +361,8 @@ unittest { // test expected errors
 	testFail("test\n\ttest\n\t\t\ttest", "Line is indented too deeply.");
 	testFail("test#", "Expected identifier but got nothing.");
 	testFail("test.()", "Expected identifier but got '('.");
+	testFail("|.", "Text nodes do not support text blocks.");
+	testFail("|: a", "Text nodes do not support nested tags.");
 }
 
 unittest { // includes
@@ -852,12 +854,16 @@ private Node parseTagLine(ref string input, ref Location loc, out bool has_neste
 		ret.contents ~= NodeContent.interpolation(ctstrip(skipLine(input, idx, loc)), l);
 		input = input[idx .. $];
 	} else if (idx < input.length && input[idx] == '.') {
+		enforcep(ret.name != "|", "Text nodes do not support text blocks.", loc);
+
 		textBlock:
 		ret.attribs |= NodeAttribs.textNode;
 		idx++;
 		skipLine(input, idx, loc); // ignore the rest of the line
 		input = input[idx .. $];
 	} else if (idx < input.length && input[idx] == ':') {
+		enforcep(ret.name != "|", "Text nodes do not support nested tags.", loc);
+
 		idx++;
 
 		// skip trailing whitespace (but no line breaks)
