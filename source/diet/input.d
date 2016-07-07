@@ -17,7 +17,7 @@ template collectFiles(string root_file)
 {
 	import std.algorithm.searching : canFind;
 	enum contents = stripUTF8BOM(import(root_file));
-	enum baseFiles = collectReferencedFiles!contents;
+	enum baseFiles = collectReferencedFiles!(root_file, contents);
 	static if (baseFiles.canFind!(f => f.name == root_file))
 		enum collectFiles = baseFiles;
 	else enum collectFiles = InputFile(root_file, contents) ~ baseFiles;
