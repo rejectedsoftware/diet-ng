@@ -189,6 +189,15 @@ unittest { // test basic functionality
 	assert(parseDiet("|text") == [
 		new Node(ln(0), "|", null, [NodeContent.text("text", ln(0))])
 	]);
+	assert(parseDiet("|.") == [
+		new Node(ln(0), "|", null, [NodeContent.text(".", ln(0))])
+	]);
+	assert(parseDiet("|:") == [
+		new Node(ln(0), "|", null, [NodeContent.text(":", ln(0))])
+	]);
+	assert(parseDiet("|&x") == [
+		new Node(ln(0), "|", null, [NodeContent.text("x", ln(0))], NodeAttribs.translated)
+	], text(parseDiet("|&x")));
 	assert(parseDiet("-if(x)") == [
 		new Node(ln(0), "-", null, [NodeContent.text("if(x)", ln(0))])
 	]);
@@ -370,8 +379,6 @@ unittest { // test expected errors
 	testFail("test\n\ttest\n\t\t\ttest", "Line is indented too deeply.");
 	testFail("test#", "Expected identifier but got nothing.");
 	testFail("test.()", "Expected identifier but got '('.");
-	testFail("|.", "Text nodes do not support text blocks.");
-	testFail("|: a", "Text nodes do not support nested tags.");
 	testFail("a #[b.]", "Multi-line text nodes are not permitted for inline-tags.");
 	testFail("a #[b: c]", "Nested inline-tags not allowed.");
 }
@@ -804,55 +811,93 @@ private Node parseTagLine(ref string input, ref Location loc, out bool has_neste
 		ret.name = "doctype";
 		parseTextLine(input, ret, loc);
 		return ret;
-	} else if (input.startsWith('|')) { // text line
-		input = input[1 .. $];
-		ret.name = "|";
-	} else if (input.startsWith('<')) { // inline HTML/XML
+	}
+
+	if (input.startsWith('<')) { // inline HTML/XML
 		ret.name = "|";
 		parseTextLine(input, ret, loc);
 		return ret;
+	}
+
+	if (input.startsWith('|')) { // text line
+		input = input[1 .. $];
+		ret.name = "|";
+		if (idx < input.length && input[idx] == '&') { ret.attribs |= NodeAttribs.translated; idx++; }
 	} else {
 		ret.name = skipIdent(input, idx, ":-_", loc, true);
 		// a trailing ':' is not part of the tag name, but signals a nested node
 		if (ret.name.endsWith(":")) {
 			ret.name = ret.name[0 .. $-1];
 			idx--;
-		} else {
-			// node ID
-			if (idx < input.length && input[idx] == '#') {
-				idx++;
-				auto value = skipIdent(input, idx, "-_", loc);
-				enforcep(value.length > 0, "Expected id.", loc);
-				ret.attributes ~= Attribute("id", [AttributeContent(AttributeContent.Kind.text, value)]);
-			}
+		}
 
-			// node classes
-			while (idx < input.length && input[idx] == '.') {
-				if (idx+1 >= input.length || input[idx+1].isWhite)
-					goto textBlock;
-				idx++;
-				auto value = skipIdent(input, idx, "-_", loc);
-				enforcep(value.length > 0, "Expected class name identifier.", loc);
-				ret.attributes ~= Attribute("class", [AttributeContent(AttributeContent.Kind.text, value)]);
-			}
+	 	// node ID
+		if (idx < input.length && input[idx] == '#') {
+			idx++;
+			auto value = skipIdent(input, idx, "-_", loc);
+			enforcep(value.length > 0, "Expected id.", loc);
+			ret.attributes ~= Attribute("id", [AttributeContent(AttributeContent.Kind.text, value)]);
+		}
 
-			// generic attributes
-			if (idx < input.length && input[idx] == '(')
-				parseAttributes(input, idx, ret, loc);
+		// node classes
+		while (idx < input.length && input[idx] == '.') {
+			if (idx+1 >= input.length || input[idx+1].isWhite)
+				goto textBlock;
+			idx++;
+			auto value = skipIdent(input, idx, "-_", loc);
+			enforcep(value.length > 0, "Expected class name identifier.", loc);
+			ret.attributes ~= Attribute("class", [AttributeContent(AttributeContent.Kind.text, value)]);
+		}
 
-			if (idx < input.length && input[idx] == '<') {
-				idx++;
-				ret.attribs |= NodeAttribs.fitInside;
-			}
+		// generic attributes
+		if (idx < input.length && input[idx] == '(')
+			parseAttributes(input, idx, ret, loc);
 
-			if (idx < input.length && input[idx] == '>') {
+		if (idx < input.length && input[idx] == '<') {
+			idx++;
+			ret.attribs |= NodeAttribs.fitInside;
+		}
+
+		if (idx < input.length && input[idx] == '>') {
+			idx++;
+			ret.attribs |= NodeAttribs.fitOutside;
+		}
+
+		if (idx < input.length && input[idx] == '&') {
+			idx++;
+			ret.attribs |= NodeAttribs.translated;
+		}
+
+		if (idx < input.length && input[idx] == '.') {
+			textBlock:
+			ret.attribs |= NodeAttribs.textNode;
+			idx++;
+			skipLine(input, idx, loc); // ignore the rest of the line
+			input = input[idx .. $];
+			return ret;
+		}
+
+		if (idx < input.length && input[idx] == ':') {
+			idx++;
+
+			// skip trailing whitespace (but no line breaks)
+			while (idx < input.length && (input[idx] == ' ' || input[idx] == '\t'))
 				idx++;
-				ret.attribs |= NodeAttribs.fitOutside;
+
+			// see if we got anything left on the line
+			if (idx < input.length) {
+				if (input[idx] == '\n' || input[idx] == '\r') {
+					// FIXME: should we rather error out here?
+					skipLine(input, idx, loc);
+				} else {
+					// leaves the rest of the line to parse another tag
+					has_nested = true;
+				}
 			}
+			input = input[idx .. $];
+			return ret;
 		}
 	}
-
-	if (idx < input.length && input[idx] == '&') { ret.attribs |= NodeAttribs.translated; idx++; }
 
 	if (idx+1 < input.length && input[idx .. idx+2] == "!=") {
 		idx += 2;
@@ -864,50 +909,21 @@ private Node parseTagLine(ref string input, ref Location loc, out bool has_neste
 		auto l = loc;
 		ret.contents ~= NodeContent.interpolation(ctstrip(skipLine(input, idx, loc)), l);
 		input = input[idx .. $];
-	} else if (idx < input.length && input[idx] == '.') {
-		enforcep(ret.name != "|", "Text nodes do not support text blocks.", loc);
-
-		textBlock:
-		ret.attribs |= NodeAttribs.textNode;
-		idx++;
-		skipLine(input, idx, loc); // ignore the rest of the line
+	} else if (idx < input.length && input[idx] == ' ') {
+		// parse the rest of the line as text contents (if any non-ws)
+		input = input[idx+1 .. $];
+		parseTextLine(input, ret, loc);
+	} else if (ret.name == "|") {
+		// allow omitting the whitespace for "|" text nodes
 		input = input[idx .. $];
-	} else if (idx < input.length && input[idx] == ':') {
-		enforcep(ret.name != "|", "Text nodes do not support nested tags.", loc);
-
-		idx++;
-
-		// skip trailing whitespace (but no line breaks)
-		while (idx < input.length && (input[idx] == ' ' || input[idx] == '\t'))
-			idx++;
-
-		// see if we got anything left on the line
-		if (idx < input.length) {
-			if (input[idx] == '\n' || input[idx] == '\r') {
-				// FIXME: should we rather error out here?
-				skipLine(input, idx, loc);
-			} else {
-				// leaves the rest of the line to parse another tag
-				has_nested = true;
-			}
-		}
-		input = input[idx .. $];
+		parseTextLine(input, ret, loc);
 	} else {
-		if (idx < input.length && input[idx] == ' ') {
-			// parse the rest of the line as text contents (if any non-ws)
-			input = input[idx+1 .. $];
-			parseTextLine(input, ret, loc);
-		} else if (ret.name == "|") {
-			// allow omitting the whitespace for "|" text nodes
-			parseTextLine(input, ret, loc);
-		} else {
-			import std.string : strip;
+		import std.string : strip;
 
-			auto remainder = skipLine(input, idx, loc);
-			input = input[idx .. $];
-			enforcep(remainder.strip().length == 0,
-				"Expected node text separated by a space character or end of line, but got '"~remainder~"'.", loc);
-		}
+		auto remainder = skipLine(input, idx, loc);
+		input = input[idx .. $];
+		enforcep(remainder.strip().length == 0,
+			"Expected node text separated by a space character or end of line, but got '"~remainder~"'.", loc);
 	}
 
 	return ret;
