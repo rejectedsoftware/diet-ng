@@ -527,7 +527,7 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, Bloc
 		enforcep(nodes[0].attributes.length == 0, "'extends' cannot have attributes.", nodes[0].loc);
 
 		string base_template = nodes[0].contents[0].value.ctstrip;
-		auto base_idx = files.countUntil!(f => matchesName(f.name, base_template));
+		auto base_idx = files.countUntil!(f => matchesName(f.name, base_template, files[file_index].name));
 		assert(base_idx >= 0, "Missing base template: "~base_template);
 
 		// collect all blocks
@@ -602,7 +602,7 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, Bloc
 		} else if (n.name == "include") {
 			auto name = extractFilename(n);
 			enforcep(n.contents.length == 1, "Includes cannot have children.", n.loc);
-			auto fidx = files.countUntil!(f => matchesName(f.name, name));
+			auto fidx = files.countUntil!(f => matchesName(f.name, name, files[file_index].name));
 			enforcep(fidx >= 0, "Missing include input file: "~name, n.loc);
 			insert(parseDietWithExtensions(files, fidx, null, import_stack ~ file_index));
 		} else {
@@ -1272,10 +1272,12 @@ private string skipAttribString(in ref string s, ref size_t idx, char delimiter,
 	return s[start .. idx];
 }
 
-private bool matchesName(string filename, string logical_name)
+private bool matchesName(string filename, string logical_name, string parent_name)
 {
+	import std.path : extension;
 	if (filename == logical_name) return true;
-	if (filename.endsWith(".dt") && filename[0 .. $-3] == logical_name) return true;
+	auto ext = extension(parent_name);
+	if (filename.endsWith(ext) && filename[0 .. $-ext.length] == logical_name) return true;
 	return false;
 }
 

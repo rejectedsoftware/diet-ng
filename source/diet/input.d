@@ -23,8 +23,10 @@ template collectFiles(string root_file)
 	else enum collectFiles = InputFile(root_file, contents) ~ baseFiles;
 }
 
-private template collectReferencedFiles(string file_contents)
+private template collectReferencedFiles(string file_name, string file_contents)
 {
+	import std.path : extension;
+
 	enum references = collectReferences(file_contents);
 	template impl(size_t i) {
 		static if (i < references.length) {
@@ -32,8 +34,8 @@ private template collectReferencedFiles(string file_contents)
 			static if (__traits(compiles, import(references[i]))) {
 				enum ifiles = collectFiles!(references[i]);
 				enum impl = merge(ifiles, rfiles);
-			} else static if (__traits(compiles, import(references[i] ~ ".dt"))) {
-				enum ifiles = collectFiles!(references[i] ~ ".dt");
+			} else static if (__traits(compiles, import(references[i] ~ extension(file_name)))) {
+				enum ifiles = collectFiles!(references[i] ~ extension(file_name));
 				enum impl = merge(ifiles, rfiles);
 			} else enum impl = rfiles;
 		} else enum InputFile[] impl = [];
