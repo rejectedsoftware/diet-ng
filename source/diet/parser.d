@@ -225,6 +225,15 @@ unittest { // test basic functionality
 			NodeContent.tag(new Node(ln(0), "b"))
 		])
 	]);
+	assert(parseDiet("a #[b #[c d]]") == [
+		new Node(ln(0), "a", null, [
+			NodeContent.tag(new Node(ln(0), "b", null, [
+				NodeContent.tag(new Node(ln(0), "c", null, [
+					NodeContent.text("d", ln(0))
+				]))
+			]))
+		])
+	]);
 
 	// whitespace fitting
 	assert(parseDiet("a<>") == [
