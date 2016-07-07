@@ -372,6 +372,8 @@ unittest { // test expected errors
 	testFail("test.()", "Expected identifier but got '('.");
 	testFail("|.", "Text nodes do not support text blocks.");
 	testFail("|: a", "Text nodes do not support nested tags.");
+	testFail("a #[b.]", "Multi-line text nodes are not permitted for inline-tags.");
+	testFail("a #[b: c]", "Nested inline-tags not allowed.");
 }
 
 unittest { // includes
@@ -954,8 +956,11 @@ private void parseTextLine(ref string input, ref Node dst, ref Location loc)
 					auto tag = skipUntilClosingBracket(input, idx, loc);
 					idx++;
 					bool has_nested;
-					dst.contents ~= NodeContent.tag(parseTagLine(tag, loc, has_nested));
-					enforcep(!has_nested, "Nested inline tags not allowed.", loc);
+					auto itag = parseTagLine(tag, loc, has_nested);
+					enforcep(!(itag.attribs & (NodeAttribs.textNode|NodeAttribs.rawTextNode)),
+						"Multi-line text nodes are not permitted for inline-tags.", loc);
+					enforcep(!has_nested, "Nested inline-tags not allowed.", loc);
+					dst.contents ~= NodeContent.tag(itag);
 					sidx = idx;
 				} else idx++;
 				break;
