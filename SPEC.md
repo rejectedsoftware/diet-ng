@@ -183,6 +183,7 @@ Example:
     p It uses the syntax \#{...} or \!{...}.
 
 Outputs:
+
     <p>This text contains dynamically generated <i>text</i></p>
     <p>It uses the syntax #{...} or !{...}.</p>
 
@@ -192,10 +193,12 @@ Outputs:
 These work almost the same as normal text interpolations, except that they obey different escaping rules that depend on the output format.
 
 Example:
+
 	- foreach (i; 0 .. 3)
 		p(class='text#{i % 2 ? "even" : "odd"}') #{i+1}
 
 Outputs:
+
 	<p class="odd">1</p>
 	<p class="even">2</p>
 	<p class="odd">3</p>
@@ -204,25 +207,25 @@ Outputs:
 Filters
 -------
 
-":filter1 :filter2 text"
+`:filter1 :filter2 text`
 
-TODO!
+**TODO!**
 
 
 Includes
 --------
 
-"include file(.ext)"
+`include file(.ext)`
 
-TODO!
+**TODO!**
 
 
 Blocks and Extensions
 ---------------------
 
-"extend file(.ext)"
+`extend file(.ext)`
 
-TODO!
+**TODO!**
 
 
 HTML-specific Features
@@ -230,14 +233,14 @@ HTML-specific Features
 
 ### Doctype Specifications
 
-"doctype ..."
+`doctype ...`
 
-Legacy syntax: "!!! ..." will be transformed to "doctype ..."
+Legacy syntax: `!!! ...` will be transformed to `doctype ...`
 
-TODO!
+**TODO!**
 
 
 Grammar
 -------
 
-TODO!
+**TODO!**
