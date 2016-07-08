@@ -4,6 +4,13 @@ import diet.internal.string;
 
 
 class Node {
+	enum SpecialName {
+		comment = "//",
+		hidden = "//-",
+		code = "-",
+		text = "|"
+	}
+
 	Location loc;
 	string name;
 	Attribute[] attributes;

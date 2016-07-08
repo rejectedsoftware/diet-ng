@@ -175,31 +175,31 @@ unittest { // test basic functionality
 
 	// special nodes
 	assert(parseDiet("//comment") == [
-		new Node(ln(0), "//", null, [NodeContent.text("comment", ln(0))], NodeAttribs.rawTextNode)
+		new Node(ln(0), Node.SpecialName.comment, null, [NodeContent.text("comment", ln(0))], NodeAttribs.rawTextNode)
 	]);
 	assert(parseDiet("//-hide") == [
-		new Node(ln(0), "//-", null, [NodeContent.text("hide", ln(0))], NodeAttribs.rawTextNode)
+		new Node(ln(0), Node.SpecialName.hidden, null, [NodeContent.text("hide", ln(0))], NodeAttribs.rawTextNode)
 	]);
 	assert(parseDiet("!!! 5") == [
 		new Node(ln(0), "doctype", null, [NodeContent.text("5", ln(0))])
 	]);
 	assert(parseDiet("<inline>") == [
-		new Node(ln(0), "|", null, [NodeContent.text("<inline>", ln(0))])
+		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text("<inline>", ln(0))])
 	]);
 	assert(parseDiet("|text") == [
-		new Node(ln(0), "|", null, [NodeContent.text("text", ln(0))])
+		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text("text", ln(0))])
 	]);
 	assert(parseDiet("|.") == [
-		new Node(ln(0), "|", null, [NodeContent.text(".", ln(0))])
+		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text(".", ln(0))])
 	]);
 	assert(parseDiet("|:") == [
-		new Node(ln(0), "|", null, [NodeContent.text(":", ln(0))])
+		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text(":", ln(0))])
 	]);
 	assert(parseDiet("|&x") == [
-		new Node(ln(0), "|", null, [NodeContent.text("x", ln(0))], NodeAttribs.translated)
-	], text(parseDiet("|&x")));
+		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text("x", ln(0))], NodeAttribs.translated)
+	]);
 	assert(parseDiet("-if(x)") == [
-		new Node(ln(0), "-", null, [NodeContent.text("if(x)", ln(0))])
+		new Node(ln(0), Node.SpecialName.code, null, [NodeContent.text("if(x)", ln(0))])
 	]);
 	assert(parseDiet(":foo\n\tbar") == [
 		new Node(ln(0), ":foo", null, [NodeContent.text("bar", ln(1))], NodeAttribs.rawTextNode)
@@ -555,7 +555,7 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, Bloc
 				default:
 					enforcep(false, "Extension templates may only contain blocks definitions at the root level.", n.loc);
 					break;
-				case "//", "//-": continue; // also allow comments at the root level
+				case Node.SpecialName.comment, Node.SpecialName.hidden: continue; // also allow comments at the root level
 				case "block": mode = BlockInfo.Mode.replace; break;
 				case "prepend": mode = BlockInfo.Mode.prepend; break;
 				case "append": mode = BlockInfo.Mode.append; break;
@@ -739,8 +739,8 @@ private Node[] parseDietRaw(InputFile file)
 			// comments
 			auto n = new Node;
 			n.loc = loc;
-			if (input[2 .. $].startsWith("-")) { n.name = "//-"; input = input[3 .. $]; }
-			else { n.name = "//"; input = input[2 .. $]; }
+			if (input[2 .. $].startsWith("-")) { n.name = Node.SpecialName.hidden; input = input[3 .. $]; }
+			else { n.name = Node.SpecialName.comment; input = input[2 .. $]; }
 			n.attribs |= NodeAttribs.rawTextNode;
 			auto tmploc = loc;
 			n.addText(skipLine(input, loc), tmploc);
@@ -750,7 +750,7 @@ private Node[] parseDietRaw(InputFile file)
 			input = input[1 .. $];
 			auto n = new Node;
 			n.loc = loc;
-			n.name = "-";
+			n.name = Node.SpecialName.code;
 			auto tmploc = loc;
 			n.addText(skipLine(input, loc), tmploc);
 			stack[level] = [n];
@@ -812,14 +812,14 @@ private Node parseTagLine(ref string input, ref Location loc, out bool has_neste
 	}
 
 	if (input.startsWith('<')) { // inline HTML/XML
-		ret.name = "|";
+		ret.name = Node.SpecialName.text;
 		parseTextLine(input, ret, loc);
 		return ret;
 	}
 
 	if (input.startsWith('|')) { // text line
 		input = input[1 .. $];
-		ret.name = "|";
+		ret.name = Node.SpecialName.text;
 		if (idx < input.length && input[idx] == '&') { ret.attribs |= NodeAttribs.translated; idx++; }
 	} else { // normal tag
 		if (parseTag(input, idx, ret, has_nested, loc))
@@ -840,7 +840,7 @@ private Node parseTagLine(ref string input, ref Location loc, out bool has_neste
 		// parse the rest of the line as text contents (if any non-ws)
 		input = input[idx+1 .. $];
 		parseTextLine(input, ret, loc);
-	} else if (ret.name == "|") {
+	} else if (ret.name == Node.SpecialName.text) {
 		// allow omitting the whitespace for "|" text nodes
 		input = input[idx .. $];
 		parseTextLine(input, ret, loc);

@@ -14,6 +14,7 @@ template compileHTMLDietFile(string filename, ALIASES...)
 {
 	void compileHTMLDietFile(R)(ref R _output_)
 	{
+		pragma(msg, "Compiling Diet HTML template "~filename~"...");
 		mixin(localAliases!(0, ALIASES));
 		enum files = collectFiles!filename;
 		enum nodes = parseDiet(files);
@@ -83,16 +84,15 @@ private string getHTMLMixin(ref CTX ctx, in Node node)
 	switch (node.name) {
 		default: return ctx.getElementMixin(node);
 		case "doctype": return ctx.getDoctypeMixin(node);
-		case "-": return ctx.getCodeMixin(node);
-		case "//": return ctx.getCommentMixin(node);
-		case "//-": return null;
-		case "|":
+		case Node.SpecialName.code: return ctx.getCodeMixin(node);
+		case Node.SpecialName.comment: return ctx.getCommentMixin(node);
+		case Node.SpecialName.hidden: return null;
+		case Node.SpecialName.text:
 			string ret;
 			foreach (c; node.contents)
 				ret ~= ctx.getNodeContentsMixin(c);
 			ret ~= ctx.rawText(node.loc, "\n");
 			return ret;
-
 	}
 }
 
