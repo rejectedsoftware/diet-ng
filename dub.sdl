@@ -3,3 +3,5 @@ description "Next generation Diet template compiler."
 authors "Sönke Ludwig"
 copyright "Copyright © 2015-2016 rejectedsoftware e.K."
 license "MIT"
+
+x:ddoxFilterArgs "--ex" "diet.internal."
