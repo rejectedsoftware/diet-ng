@@ -28,6 +28,25 @@ import std.algorithm.searching : endsWith, startsWith;
 import std.range.primitives : empty, front, popFront, popFrontN;
 
 
+/** Parses a Diet template document and outputs the resulting DOM tree.
+
+	The overload that takes a list of files will automatically resolve
+	includes and extensions.
+
+	Params:
+		TR = An optional transation function that takes and returns a string.
+			This function will be invoked whenever node text contents need
+			to be translated at compile tile (for the `&` node suffix).
+		text = For the single-file overload, specifies the contents of the Diet
+			template.
+		filename = For the single-file overload, specifies the file name that
+			is displayed in error messages and stored in the DOM `Location`s.
+		files = A full set of Diet template files. All files referenced in
+			includes or extension directives must be present.
+
+	Returns:
+		The list of parsed root nodes is returned.
+*/
 Node[] parseDiet(alias TR = identity)(string text, string filename = "string")
 	if (is(typeof(TR(string.init)) == string))
 {
@@ -700,7 +719,12 @@ private struct FileInfo {
 	Node[] nodes;
 }
 
-private Node[] parseDietRaw(alias TR)(InputFile file)
+
+/** Parses a single Diet template file, without resolving includes and extensions.
+
+	See_Also: `parseDiet`
+*/
+Node[] parseDietRaw(alias TR)(InputFile file)
 {
 	import std.algorithm.iteration : map;
 	import std.array : array;

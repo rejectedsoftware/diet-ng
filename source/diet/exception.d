@@ -1,7 +1,10 @@
+/** Contains exception type definitions specific to this package.
+*/
 module diet.exception;
 
 import diet.dom;
 
+/// Thrown by the parser for malformed input.
 alias DietParserException = Exception;
 
 package void enforcep(bool cond, lazy string text, in ref Location loc)

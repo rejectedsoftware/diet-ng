@@ -1,23 +1,68 @@
+/** Types to represent the DOM tree.
+
+	The DOM tree is used as an intermediate representation between the parser
+	and the generator. Filters and other kinds of transformations can be
+	executed on the DOM tree. The generator itself will apply filters and
+	other traits using `diet.traits.applyTraits`.
+*/
 module diet.dom;
 
 import diet.internal.string;
 
 
+/** Represents a single node in the DOM tree.
+*/
 class Node {
+	@safe nothrow:
+
+	/// A set of names that identify special-purpose nodes
 	enum SpecialName {
+		/** Normal comment. The content will appear in the output if the output
+			format supports comments.
+		*/
 		comment = "//",
+
+		/** Hidden comment. The content will never appear in the output.
+		*/
 		hidden = "//-",
+
+		/** D statement. A node that has pure text as its first content,
+			optionally followed by any number of child nodes. The text content
+			is either a complete D statement, or an open block statement
+			(without a block statement appended). In the latter case, all nested
+			nodes are considered to be part of the block statement's body by
+			the generator.
+		*/
 		code = "-",
+
+		/** A dummy node that contains only text and string interpolations.
+			These nodes behave the same as if their node content would be
+			inserted in their place, except that they will cause whitespace
+			(usually a space or a newline) to be prepended in the output, if
+			they are not the first child of their parent.
+		*/
 		text = "|",
-		filter = ":" // has a "filterChain" attribute with a space separated list of filter names
+
+		/** Filter node. These nodes contain only text and string interpolations
+			and have a "filterChain" attribute that contains a space separated
+			list of filter names that are applied in reverse order when the
+			traits (see `diet.traits.applyTraits`) are applied by the generator.
+		*/
+		filter = ":"
 	}
 
+	/// Start location of the node in the source file.
 	Location loc;
+	/// Name of the node
 	string name;
+	/// A key-value set of attributes.
 	Attribute[] attributes;
+	/// The main contents of the node.
 	NodeContent[] contents;
+	/// Flags that control the parser and generator behavior.
 	NodeAttribs attribs;
 
+	/// Constructs a new node.
 	this(Location loc = Location.init, string name = null, Attribute[] attributes = null, NodeContent[] contents = null, NodeAttribs attribs = NodeAttribs.none)
 	{
 		this.loc = loc;
@@ -27,6 +72,16 @@ class Node {
 		this.attribs = attribs;
 	}
 
+	/** Adds a piece of text to the node's contents.
+
+		If the node already has some content and the last piece of content is
+		also text, with a matching location, the text will be appended to that
+		`NodeContent`'s value. Otherwise, a new `NodeContent` will be appended.
+
+		Params:
+			text = The text to append to the node
+			loc = Location in the source file
+	*/
 	void addText(string text, in ref Location loc)
 	{
 		if (contents.length && contents[$-1].kind == NodeContent.Kind.text && contents[$-1].loc == loc)
@@ -34,12 +89,14 @@ class Node {
 		else contents ~= NodeContent.text(text, loc);
 	}
 
+	/** Removes all content if it conists of only white space. */
 	void stripIfOnlyWhitespace()
 	{
 		if (contents.length == 1 && contents[0].kind == NodeContent.Kind.text && contents[0].value.ctstrip.length == 0)
 			contents = null;
 	}
 
+	/** Strips any leading whitespace from the contents. */
 	void stripLeadingWhitespace()
 	{
 		while (contents.length >= 1 && contents[0].kind == NodeContent.Kind.text) {
@@ -50,6 +107,7 @@ class Node {
 		}
 	}
 
+	/** Strips any trailign whitespace from the contents. */
 	void stripTrailingWhitespace()
 	{
 		while (contents.length >= 1 && contents[$-1].kind == NodeContent.Kind.text) {
@@ -66,6 +124,11 @@ class Node {
 	/// Tests if the node consists only of text and interpolations, but doesn't contain child nodes.
 	bool isProceduralTextNode() const { import std.algorithm.searching : all; return contents.all!(c => c.kind != NodeContent.Kind.node); }
 
+	/** Returns the value of a pure text attribute.
+
+		The caller must make sure that the attribute does indeed only contain
+		a single text `AttributeContent`.
+	*/
 	string getTextAttribute(string name)
 	{
 		foreach (a; this.attributes)
@@ -76,11 +139,13 @@ class Node {
 		return null;
 	}
 
+	/// Outputs a simple string representation of the node.
 	override string toString() const {
 		import std.string : format;
 		return format("Node(%s, %s, %s, %s, %s)", this.tupleof);
 	}
 
+	/// Compares all properties of two nodes for equality.
 	override bool opEquals(Object other_) {
 		auto other = cast(Node)other_;
 		if (!other) return false;
@@ -88,6 +153,9 @@ class Node {
 	}
 }
 
+
+/** Flags that control parser or generator behavior.
+*/
 enum NodeAttribs {
 	none = 0,
 	translated = 1<<0,  /// Translate node contents
@@ -97,12 +165,30 @@ enum NodeAttribs {
 	fitInside = 1<<4,   /// Don't insert white space around the node contents when generating output (currently ignored by the HTML generator)
 }
 
+
+/** A single node attribute.
+
+	Attributes are key-value pairs, where the value can either be empty
+	(considered as a Boolean value of `true`), a string with optional
+	string interpolations, or a D expression (stored as a single
+	`interpolation` `AttributeContent`).
+*/
 struct Attribute {
+	/// Name of the attribute
 	string name;
+	/// Value of the attribute
 	AttributeContent[] contents;
 
+	/// Creates a copy of the attribute.
 	@property Attribute dup() const { return Attribute(name, contents.dup); }
 
+	/** Appends raw text to the attribute.
+
+		If the attribute already has contents and the last piece of content is
+		also text, then the text will be appended to the value of that
+		`AttributeContent`. Otherwise, a new `AttributeContent` will be
+		appended to `contents`.
+	*/
 	void addText(string str)
 	{
 		if (contents.length && contents[$-1].kind == AttributeContent.Kind.text)
@@ -111,6 +197,12 @@ struct Attribute {
 			contents ~= AttributeContent.text(str);
 	}
 
+	/** Appends a list of contents.
+
+		If the list of contents starts with a text `AttributeContent`, then this
+		first part will be appended using the same rules as for `addText`. The
+		remaining parts will be appended normally.
+	*/
 	void addContents(const(AttributeContent)[] contents)
 	{
 		if (contents.length > 0 && contents[0].kind == AttributeContent.Kind.text) {
@@ -121,46 +213,72 @@ struct Attribute {
 	}
 }
 
+
+/** A single piece of an attribute value.
+*/
 struct AttributeContent {
+	/// 
 	enum Kind {
-		text,
-		interpolation,
-		rawInterpolation
+		text,             /// Raw text (will be escaped by the generator as necessary)
+		interpolation,    /// A D expression that will be converted to text at runtime (escaped as necessary)
+		rawInterpolation  /// A D expression that will be converted to text at runtime (not escaped)
 	}
 
+	/// Kind of this attribute content
 	Kind kind;
+	/// The value - either text or a D expression
 	string value;
 
+	/// Creates a new text attribute content value.
 	static AttributeContent text(string text) { return AttributeContent(Kind.text, text); }
+	/// Creates a new string interpolation attribute content value.
 	static AttributeContent interpolation(string expression) { return AttributeContent(Kind.interpolation, expression); }
+	/// Creates a new raw string interpolation attribute content value.
 	static AttributeContent rawInterpolation(string expression) { return AttributeContent(Kind.rawInterpolation, expression); }
 }
 
+
+/** A single piece of node content.
+*/
 struct NodeContent {
+	///
 	enum Kind {
-		node,
-		text,
-		interpolation,
-		rawInterpolation
+		node,            /// A child node
+		text,            /// Raw text (not escaped in the output)
+		interpolation,   /// A D expression that will be converted to text at runtime (escaped as necessary)
+		rawInterpolation /// A D expression that will be converted to text at runtime (not escaped)
 	}
 
+	/// Kind of this node content
 	Kind kind;
+	/// Location of the content in the source file
 	Location loc;
+	/// The node - only used for `Kind.node`
 	Node node;
+	/// The string value - either text or a D expression
 	string value;
 
+	/// Creates a new child node content value.
 	static NodeContent tag(Node node) { return NodeContent(Kind.node, node.loc, node); }
+	/// Creates a new text node content value.
 	static NodeContent text(string text, Location loc) { return NodeContent(Kind.text, loc, Node.init, text); }
+	/// Creates a new string interpolation node content value.
 	static NodeContent interpolation(string text, Location loc) { return NodeContent(Kind.interpolation, loc, Node.init, text); }
+	/// Creates a new raw string interpolation node content value.
 	static NodeContent rawInterpolation(string text, Location loc) { return NodeContent(Kind.rawInterpolation, loc, Node.init, text); }
 
+	/// Compares node content for equality.
 	bool opEquals(in ref NodeContent other)
 	{
 		return this.kind == other.kind && this.loc == other.loc && this.node == other.node && this.value == other.value;
 	}
 }
 
+
+/// Represents the location of an entity within the source file.
 struct Location {
+	/// Name of the source file
 	string file;
+	/// Zero based line index within the file
 	int line;
 }
