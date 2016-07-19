@@ -18,7 +18,7 @@ template compileHTMLDietFile(string filename, ALIASES...)
 		pragma(msg, "Compiling Diet HTML template "~filename~"...");
 		mixin(localAliases!(0, ALIASES));
 		enum files = collectFiles!filename;
-		enum nodes = parseDiet!(translate!ALIASES)(files);
+		enum nodes = applyTraits!ALIASES(parseDiet!(translate!ALIASES)(files));
 		//pragma(msg, getHTMLMixin(nodes));
 		mixin(getHTMLMixin(nodes));
 	}
@@ -37,7 +37,7 @@ template compileHTMLDietStrings(alias FILES_GROUP, ALIASES...)
 	void compileHTMLDietStrings(R)(ref R _output_)
 	{
 		import diet.parser;
-		enum nodes = parseDiet!(translate!ALIASES)(filesFromGroup!FILES_GROUP);
+		enum nodes = applyTraits!ALIASES(parseDiet!(translate!ALIASES)(filesFromGroup!FILES_GROUP));
 		//pragma(msg, getHTMLMixin(nodes));
 		mixin(getHTMLMixin(nodes));
 	}
