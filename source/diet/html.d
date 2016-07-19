@@ -1,7 +1,9 @@
+/** HTML output generator implementation.
+*/
 module diet.html;
 
+import diet.defs;
 import diet.dom;
-import diet.exception;
 import diet.internal.html;
 import diet.internal.string;
 import diet.input;
@@ -9,21 +11,51 @@ import diet.parser;
 import diet.traits;
 
 
-enum defaultOutputRangeName = "_output_";
+/** Compiles a Diet template file that is available as a string import.
 
+	The final HTML will be written to the given `_diet_output` output range.
+
+	Params:
+		filename = Name of the main Diet template file.
+		ALIASES = A list of variables to make available inside of the template,
+			as well as traits structs annotated with the `@dietTraits`
+			attribute.
+		dst = The output range to write the generated HTML to.
+
+	See_Also: `compileHTMLDietString`, `compileHTMLDietStrings`
+*/
 template compileHTMLDietFile(string filename, ALIASES...)
 {
-	void compileHTMLDietFile(R)(ref R _output_)
+	pragma(msg, "Compiling Diet HTML template "~filename~"...");
+	enum _diet_nodes = applyTraits!ALIASES(parseDiet!(translate!ALIASES)(collectFiles!filename));
+
+	// uses the correct range name and removes 'dst' from the scope
+	static void exec(R)(ref R _diet_output)
 	{
-		pragma(msg, "Compiling Diet HTML template "~filename~"...");
-		mixin(localAliases!(0, ALIASES));
-		enum files = collectFiles!filename;
-		enum nodes = applyTraits!ALIASES(parseDiet!(translate!ALIASES)(files));
+		mixin(localAliasesMixin!(0, ALIASES));
 		//pragma(msg, getHTMLMixin(nodes));
-		mixin(getHTMLMixin(nodes));
+		mixin(getHTMLMixin(_diet_nodes));
+	}
+
+	void compileHTMLDietFile(R)(ref R dst)
+	{
+		exec(dst);
 	}
 }
 
+/** Compiles a Diet template given as a string.
+
+	The final HTML will be written to the given `_diet_output` output range.
+
+	Params:
+		contents = The contents of the Diet template
+		ALIASES = A list of variables to make available inside of the template,
+			as well as traits structs annotated with the `@dietTraits`
+			attribute.
+		dst = The output range to write the generated HTML to.
+
+	See_Also: `compileHTMLDietString`, `compileHTMLDietStrings`
+*/
 template compileHTMLDietString(string contents, ALIASES...)
 {
 	void compileHTMLDietString(R)(ref R dst)
@@ -32,18 +64,49 @@ template compileHTMLDietString(string contents, ALIASES...)
 	}
 }
 
+/** Compiles a set of Diet template files.
+
+	The final HTML will be written to the given `_diet_output` output range.
+
+	Params:
+		FILES_GROUP = A `diet.input.Group` containing an alternating list of
+			file names and file contents.
+		ALIASES = A list of variables to make available inside of the template,
+			as well as traits structs annotated with the `@dietTraits`
+			attribute.
+		dst = The output range to write the generated HTML to.
+
+	See_Also: `compileHTMLDietString`, `compileHTMLDietStrings`
+*/
 template compileHTMLDietStrings(alias FILES_GROUP, ALIASES...)
 {
-	void compileHTMLDietStrings(R)(ref R _output_)
+	enum _diet_nodes = applyTraits!ALIASES(parseDiet!(translate!ALIASES)(filesFromGroup!FILES_GROUP));
+
+	// uses the correct range name and removes 'dst' from the scope
+	static void exec(R)(ref R _diet_output)
 	{
-		import diet.parser;
-		enum nodes = applyTraits!ALIASES(parseDiet!(translate!ALIASES)(filesFromGroup!FILES_GROUP));
+		mixin(localAliasesMixin!(0, ALIASES));
 		//pragma(msg, getHTMLMixin(nodes));
-		mixin(getHTMLMixin(nodes));
+		mixin(getHTMLMixin(_diet_nodes));
+	}
+
+	void compileHTMLDietStrings(R)(ref R dst)
+	{
+		exec(dst);
 	}
 }
 
-string getHTMLMixin(in Node[] nodes, string range_name = defaultOutputRangeName)
+/** Returns a mixin string that generates HTML for the given DOM tree.
+
+	Params:
+		nodes = The root nodes of the DOM tree
+		range_name = Optional custom name to use for the output range, defaults
+			to `_diet_output`.
+
+	Returns:
+		A string of D statements suitable to be mixed in inside of a function.
+*/
+string getHTMLMixin(in Node[] nodes, string range_name = dietOutputRangeName)
 {
 	CTX ctx;
 	ctx.rangeName = range_name;
@@ -59,10 +122,10 @@ unittest {
 	void test(string src)(string expected) {
 		import std.array : appender;
 		static const n = parseDiet(src);
-		auto _output_ = appender!string();
+		auto _diet_output = appender!string();
 		//pragma(msg, getHTMLMixin(n));
 		mixin(getHTMLMixin(n));
-		assert(_output_.data == expected, _output_.data);
+		assert(_diet_output.data == expected, _diet_output.data);
 	}
 
 	test!"doctype html\nfoo(test=true)"("<!DOCTYPE html><foo test></foo>");

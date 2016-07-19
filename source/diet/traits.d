@@ -75,7 +75,7 @@ string translate(ALIASES...)(string text)
 */
 Node[] applyTraits(ALIASES...)(Node[] nodes)
 {
-	import diet.exception;
+	import diet.defs : enforcep;
 	import std.algorithm.searching : startsWith;
 	import std.array : split;
 
@@ -152,7 +152,7 @@ void filter(ALIASES...)(in char[] input, string filter, CharacterSink output)
 private string generateFilterChainMixin(string[] chain, NodeContent[] contents)
 {
 	import std.format : format;
-	import diet.exception : enforcep;
+	import diet.defs : enforcep, dietOutputRangeName;
 	import diet.internal.string : dstringEscape;
 
 	string ret = `{ import std.array : appender; import std.format : formattedWrite; `;
@@ -187,7 +187,7 @@ private string generateFilterChainMixin(string[] chain, NodeContent[] contents)
 		if (i > 0) {
 			oname = format("__f%s_app", i);
 			ret ~= q{auto %s = appender!(char[]);}.format(oname);
-		} else oname = "_output_";
+		} else oname = dietOutputRangeName;
 		ret ~= q{%s.filter!ALIASES("%s", s => %s.put(s));}.format(iname, dstringEscape(f), oname);
 		if (i > 0) ret ~= q{auto __f%s = %s.data;}.format(i, oname);
 	}

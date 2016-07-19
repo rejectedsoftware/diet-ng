@@ -20,9 +20,9 @@
 module diet.parser;
 
 import diet.dom;
-import diet.exception;
-import diet.internal.string;
+import diet.defs;
 import diet.input;
+import diet.internal.string;
 
 import std.algorithm.searching : endsWith, startsWith;
 import std.range.primitives : empty, front, popFront, popFrontN;
@@ -34,7 +34,7 @@ import std.range.primitives : empty, front, popFront, popFrontN;
 	includes and extensions.
 
 	Params:
-		TR = An optional transation function that takes and returns a string.
+		TR = An optional translation function that takes and returns a string.
 			This function will be invoked whenever node text contents need
 			to be translated at compile tile (for the `&` node suffix).
 		text = For the single-file overload, specifies the contents of the Diet

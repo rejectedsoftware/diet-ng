@@ -1,9 +1,11 @@
-/** Contains functions for collecting all necessary dependencies for a Diet
-	template file.
+/** Contains common definitions and logic to collect input dependencies.
 
-	This module is typically used only by output generators.
+	This module is typically only used by generator implementations.
 */
 module diet.input;
+
+import diet.traits : DietTraitsAttribute;
+
 
 /** Converts a `Group` with alternating file names and contents to an array of
 	`InputFile`s.
@@ -57,6 +59,7 @@ template Group(A...) {
 */
 template localAliasesMixin(int i, ALIASES...)
 {
+	import std.traits : hasUDA;
 	static if (i < ALIASES.length) {
 		import std.conv : to;
 		static if (hasUDA!(ALIASES[i], DietTraitsAttribute)) enum string localAliasesMixin = localAliasesMixin!(i+1);

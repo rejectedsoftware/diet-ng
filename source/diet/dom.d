@@ -141,6 +141,7 @@ class Node {
 
 	/// Outputs a simple string representation of the node.
 	override string toString() const {
+		scope (failure) assert(false);
 		import std.string : format;
 		return format("Node(%s, %s, %s, %s, %s)", this.tupleof);
 	}
@@ -149,8 +150,10 @@ class Node {
 	override bool opEquals(Object other_) {
 		auto other = cast(Node)other_;
 		if (!other) return false;
-		return this.tupleof == other.tupleof;
+		return this.opEquals(other);
 	}
+
+	bool opEquals(in Node other) const { return this.tupleof == other.tupleof; }
 }
 
 
@@ -174,6 +177,8 @@ enum NodeAttribs {
 	`interpolation` `AttributeContent`).
 */
 struct Attribute {
+	@safe nothrow:
+
 	/// Name of the attribute
 	string name;
 	/// Value of the attribute
@@ -217,6 +222,8 @@ struct Attribute {
 /** A single piece of an attribute value.
 */
 struct AttributeContent {
+	@safe nothrow:
+
 	/// 
 	enum Kind {
 		text,             /// Raw text (will be escaped by the generator as necessary)
@@ -241,6 +248,8 @@ struct AttributeContent {
 /** A single piece of node content.
 */
 struct NodeContent {
+	@safe nothrow:
+
 	///
 	enum Kind {
 		node,            /// A child node
@@ -269,8 +278,13 @@ struct NodeContent {
 
 	/// Compares node content for equality.
 	bool opEquals(in ref NodeContent other)
-	{
-		return this.kind == other.kind && this.loc == other.loc && this.node == other.node && this.value == other.value;
+	const {
+		if (this.kind != other.kind) return false;
+		if (this.loc != other.loc) return false;
+		if (this.value != other.value) return false;
+		if (this.node is other.node) return true;
+		if (this.node is null || other.node is null) return false;
+		return this.node.opEquals(other.node);
 	}
 }
 
