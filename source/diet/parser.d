@@ -28,24 +28,22 @@ import std.algorithm.searching : endsWith, startsWith;
 import std.range.primitives : empty, front, popFront, popFrontN;
 
 
-InputFile[] collectInputFiles(string diet_file)()
-{
-	assert(false);
-}
-
-Node[] parseDiet(string text, string filename = "string")
+Node[] parseDiet(alias TR = identity)(string text, string filename = "string")
+	if (is(typeof(TR(string.init)) == string))
 {
 	InputFile[1] f;
 	f[0].name = filename;
 	f[0].contents = text;
-	return parseDiet(f);
+	return parseDiet!TR(f);
 }
 
-Node[] parseDiet(InputFile[] files)
+Node[] parseDiet(alias TR = identity)(InputFile[] files)
+	if (is(typeof(TR(string.init)) == string))
 {
+	import diet.traits;
 	import std.algorithm.iteration : map;
 	import std.array : array;
-	FileInfo[] parsed_files = files.map!(f => FileInfo(f.name, parseDietRaw(f))).array;
+	FileInfo[] parsed_files = files.map!(f => FileInfo(f.name, parseDietRaw!TR(f))).array;
 	return parseDietWithExtensions(parsed_files, 0, null, null);
 }
 
@@ -364,6 +362,40 @@ unittest {
 	], to!string(t));
 }
 
+unittest { // translation
+	import std.string : toUpper;
+	import std.conv : to;
+
+	static Location ln(int l) { return Location("string", l); }
+
+	static string tr(string str) { return "("~toUpper(str)~")"; }
+
+	assert(parseDiet!tr("foo& test") == [
+		new Node(ln(0), "foo", null, [
+			NodeContent.text("(TEST)", ln(0))
+		], NodeAttribs.translated)
+	], to!string(parseDiet!tr("foo& test")));
+
+	assert(parseDiet!tr("foo& test #{x} it") == [
+		new Node(ln(0), "foo", null, [
+			NodeContent.text("(TEST ", ln(0)),
+			NodeContent.interpolation("X", ln(0)),
+			NodeContent.text(" IT)", ln(0)),
+		], NodeAttribs.translated)
+	]);
+
+	assert(parseDiet!tr("|&x") == [
+		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text("(X)", ln(0))], NodeAttribs.translated)
+	]);
+
+	assert(parseDiet!tr("foo&.\n\tbar\n\tbaz") == [
+		new Node(ln(0), "foo", null, [
+			NodeContent.text("(BAR)", ln(1)),
+			NodeContent.text("\n(BAZ)", ln(2))
+		], NodeAttribs.translated|NodeAttribs.textNode)
+	], to!string(parseDiet!tr("foo&.\n\tbar\n\tbaz")	));
+}
+
 unittest { // test expected errors
 	void testFail(string diet, string msg)
 	{
@@ -475,6 +507,12 @@ unittest { // test CTFE-ability
 	static const result = parseDiet("foo#id.cls(att=\"val\", att2=1+3, att3='test#{4}it')\n\tbar");
 	static assert(result.length == 1);
 }
+
+
+/** Dummy translation function that returns the input unmodified.
+*/
+string identity(string str) nothrow @safe @nogc { return str; }
+
 
 private string parseIdent(in ref string str, ref size_t start,
 	   	string breakChars, in ref Location loc)
@@ -662,7 +700,7 @@ private struct FileInfo {
 	Node[] nodes;
 }
 
-private Node[] parseDietRaw(InputFile file)
+private Node[] parseDietRaw(alias TR)(InputFile file)
 {
 	import std.algorithm.iteration : map;
 	import std.array : array;
@@ -719,7 +757,13 @@ private Node[] parseDietRaw(InputFile file)
 				if (!pnode.contents.empty)
 					pnode.addText("\n", loc);
 				if (indent.length) pnode.addText(indent, loc);
-				parseTextLine(input, pnode, loc);
+				if (pnode.attribs & NodeAttribs.translated) {
+					size_t idx;
+					Location loccopy = loc;
+					auto ln = TR(skipLine(input, idx, loc));
+					input = input[idx .. $];
+					parseTextLine(ln, pnode, loccopy);
+				} else parseTextLine(input, pnode, loc);
 				continue;
 			} else if (pnode.attribs & NodeAttribs.rawTextNode) {
 				if (!pnode.contents.empty)
@@ -780,7 +824,7 @@ private Node[] parseDietRaw(InputFile file)
 			// normal tag line
 			bool has_nested;
 			stack[level] = null;
-			do stack[level] ~= parseTagLine(input, loc, has_nested);
+			do stack[level] ~= parseTagLine!TR(input, loc, has_nested);
 			while (has_nested);
 		}
 
@@ -797,7 +841,7 @@ private Node[] parseDietRaw(InputFile file)
 	return ret;
 }
 
-private Node parseTagLine(ref string input, ref Location loc, out bool has_nested)
+private Node parseTagLine(alias TR)(ref string input, ref Location loc, out bool has_nested)
 {
 	size_t idx = 0;
 
@@ -827,30 +871,34 @@ private Node parseTagLine(ref string input, ref Location loc, out bool has_neste
 	}
 
 	if (idx+1 < input.length && input[idx .. idx+2] == "!=") {
+		enforcep(!(ret.attribs & NodeAttribs.translated), "Compile-time translation is not supported for (raw) assignments.", ret.loc);
 		idx += 2;
 		auto l = loc;
 		ret.contents ~= NodeContent.rawInterpolation(ctstrip(skipLine(input, idx, loc)), l);
 		input = input[idx .. $];
 	} else if (idx < input.length && input[idx] == '=') {
+		enforcep(!(ret.attribs & NodeAttribs.translated), "Compile-time translation is not supported for assignments.", ret.loc);
 		idx++;
 		auto l = loc;
 		ret.contents ~= NodeContent.interpolation(ctstrip(skipLine(input, idx, loc)), l);
 		input = input[idx .. $];
-	} else if (idx < input.length && input[idx] == ' ') {
-		// parse the rest of the line as text contents (if any non-ws)
-		input = input[idx+1 .. $];
-		parseTextLine(input, ret, loc);
-	} else if (ret.name == Node.SpecialName.text) {
-		// allow omitting the whitespace for "|" text nodes
-		input = input[idx .. $];
-		parseTextLine(input, ret, loc);
 	} else {
-		import std.string : strip;
-
 		auto remainder = skipLine(input, idx, loc);
 		input = input[idx .. $];
-		enforcep(remainder.strip().length == 0,
-			"Expected node text separated by a space character or end of line, but got '"~remainder~"'.", loc);
+
+		if (remainder.length && remainder[0] == ' ') {
+			// parse the rest of the line as text contents (if any non-ws)
+			remainder = TR(remainder[1 .. $]);
+			parseTextLine(remainder, ret, loc);
+		} else if (ret.name == Node.SpecialName.text) {
+			// allow omitting the whitespace for "|" text nodes
+			remainder = TR(remainder);
+			parseTextLine(remainder, ret, loc);
+		} else {
+			import std.string : strip;
+			enforcep(remainder.strip().length == 0,
+				"Expected node text separated by a space character or end of line, but got '"~remainder~"'.", loc);
+		}
 	}
 
 	return ret;
@@ -986,9 +1034,11 @@ private void parseTextLine(ref string input, ref Node dst, ref Location loc)
 					auto tag = skipUntilClosingBracket(input, idx, loc);
 					idx++;
 					bool has_nested;
-					auto itag = parseTagLine(tag, loc, has_nested);
+					auto itag = parseTagLine!identity(tag, loc, has_nested);
 					enforcep(!(itag.attribs & (NodeAttribs.textNode|NodeAttribs.rawTextNode)),
 						"Multi-line text nodes are not permitted for inline-tags.", loc);
+					enforcep(!(itag.attribs & NodeAttribs.translated),
+						"Inline-tags cannot be translated individually.", loc);
 					enforcep(!has_nested, "Nested inline-tags not allowed.", loc);
 					dst.contents ~= NodeContent.tag(itag);
 					sidx = idx;

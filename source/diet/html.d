@@ -6,6 +6,7 @@ import diet.internal.html;
 import diet.internal.string;
 import diet.input;
 import diet.parser;
+import diet.traits;
 
 
 enum defaultOutputRangeName = "_output_";
@@ -17,7 +18,7 @@ template compileHTMLDietFile(string filename, ALIASES...)
 		pragma(msg, "Compiling Diet HTML template "~filename~"...");
 		mixin(localAliases!(0, ALIASES));
 		enum files = collectFiles!filename;
-		enum nodes = parseDiet(files);
+		enum nodes = parseDiet!(translate!ALIASES)(files);
 		//pragma(msg, getHTMLMixin(nodes));
 		mixin(getHTMLMixin(nodes));
 	}
@@ -36,7 +37,7 @@ template compileHTMLDietStrings(alias FILES_GROUP, ALIASES...)
 	void compileHTMLDietStrings(R)(ref R _output_)
 	{
 		import diet.parser;
-		enum nodes = parseDiet(filesFromGroup!FILES_GROUP);
+		enum nodes = parseDiet!(translate!ALIASES)(filesFromGroup!FILES_GROUP);
 		//pragma(msg, getHTMLMixin(nodes));
 		mixin(getHTMLMixin(nodes));
 	}

@@ -59,7 +59,11 @@ class Node {
 		}
 	}
 
+	/// Tests if the node consists of only a single, static string.
 	bool isTextNode() const { return contents.length == 1 && contents[0].kind == NodeContent.Kind.text; }
+
+	/// Tests if the node consists only of text and interpolations, but doesn't contain child nodes.
+	bool isProceduralTextNode() const { import std.algorithm.searching : all; return contents.all!(c => c.kind != NodeContent.Kind.node); }
 
 	override string toString() const {
 		import std.string : format;
