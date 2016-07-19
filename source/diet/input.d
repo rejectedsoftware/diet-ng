@@ -1,5 +1,13 @@
+/** Contains functions for collecting all necessary dependencies for a Diet
+	template file.
+
+	This module is typically used only by output generators.
+*/
 module diet.input;
 
+/** Converts a `Group` with alternating file names and contents to an array of
+	`InputFile`s.
+*/
 @property InputFile[] filesFromGroup(alias FILES_GROUP)()
 {
 	static assert(FILES_GROUP.expand.length % 2 == 0);
@@ -13,6 +21,12 @@ module diet.input;
 	return ret;
 }
 
+/** Using the file name of a string import Diet file, returns a list of all
+	required files.
+
+	These files recursively include all imports or extension templates that
+	are used. The type of the list is `InputFile[]`.
+*/
 template collectFiles(string root_file)
 {
 	import std.algorithm.searching : canFind;
@@ -21,6 +35,36 @@ template collectFiles(string root_file)
 	static if (baseFiles.canFind!(f => f.name == root_file))
 		enum collectFiles = baseFiles;
 	else enum collectFiles = InputFile(root_file, contents) ~ baseFiles;
+}
+
+/// Encapsulates a single input file.
+struct InputFile {
+	string name;
+	string contents;
+}
+
+/** Helper template to aggregate a list of compile time values.
+	
+	This is similar to `AliasSeq`, but does not auto-expand.
+*/
+template Group(A...) {
+	import std.typetuple;
+	alias expand = TypeTuple!A;
+}
+
+/** Returns a mixin string that makes all passed symbols available in the
+	mixin's scope.
+*/
+template localAliasesMixin(int i, ALIASES...)
+{
+	static if (i < ALIASES.length) {
+		import std.conv : to;
+		static if (hasUDA!(ALIASES[i], DietTraitsAttribute)) enum string localAliasesMixin = localAliasesMixin!(i+1);
+		else enum string localAliasesMixin = "alias ALIASES["~i.to!string~"] "~__traits(identifier, ALIASES[i])~";\n"
+			~localAliasesMixin!(i+1, ALIASES);
+	} else {
+		enum string localAliasesMixin = "";
+	}
 }
 
 private template collectReferencedFiles(string file_name, string file_contents)
@@ -71,28 +115,6 @@ private InputFile[] merge(InputFile[] a, InputFile[] b)
 		if (!a.canFind!(g => g.name == f.name))
 			ret ~= f;
 	return ret;
-}
-
-struct InputFile {
-	string name;
-	string contents;
-}
-
-
-template Group(A...) {
-	import std.typetuple;
-	alias expand = TypeTuple!A;
-}
-
-template localAliases(int i, ALIASES...)
-{
-	static if (i < ALIASES.length) {
-		import std.conv : to;
-		enum string localAliases = "alias ALIASES["~i.to!string~"] "~__traits(identifier, ALIASES[i])~";\n"
-			~localAliases!(i+1, ALIASES);
-	} else {
-		enum string localAliases = "";
-	}
 }
 
 private string stripUTF8BOM(string input)
