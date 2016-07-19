@@ -8,7 +8,8 @@ class Node {
 		comment = "//",
 		hidden = "//-",
 		code = "-",
-		text = "|"
+		text = "|",
+		filter = ":" // has a "filterChain" attribute with a space separated list of filter names
 	}
 
 	Location loc;
@@ -65,6 +66,16 @@ class Node {
 	/// Tests if the node consists only of text and interpolations, but doesn't contain child nodes.
 	bool isProceduralTextNode() const { import std.algorithm.searching : all; return contents.all!(c => c.kind != NodeContent.Kind.node); }
 
+	string getTextAttribute(string name)
+	{
+		foreach (a; this.attributes)
+			if (a.name == name) {
+				assert(a.contents.length == 1 && a.contents[0].kind == AttributeContent.Kind.text);
+				return a.contents[0].value;
+			}
+		return null;
+	}
+
 	override string toString() const {
 		import std.string : format;
 		return format("Node(%s, %s, %s, %s, %s)", this.tupleof);
@@ -88,16 +99,16 @@ enum NodeAttribs {
 
 struct Attribute {
 	string name;
-	AttributeContent[] values;
+	AttributeContent[] contents;
 
-	@property Attribute dup() const { return Attribute(name, values.dup); }
+	@property Attribute dup() const { return Attribute(name, contents.dup); }
 
 	void addText(string str)
 	{
-		if (values.length && values[$-1].kind == AttributeContent.Kind.text)
-			values[$-1].value ~= str;
+		if (contents.length && contents[$-1].kind == AttributeContent.Kind.text)
+			contents[$-1].value ~= str;
 		else
-			values ~= AttributeContent.text(str);
+			contents ~= AttributeContent.text(str);
 	}
 
 	void addContents(const(AttributeContent)[] contents)
@@ -106,7 +117,7 @@ struct Attribute {
 			addText(contents[0].value);
 			contents = contents[1 .. $];
 		}
-		values ~= contents;
+		contents ~= contents;
 	}
 }
 

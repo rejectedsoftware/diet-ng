@@ -48,8 +48,8 @@ string getHTMLMixin(in Node[] nodes, string range_name = defaultOutputRangeName)
 	CTX ctx;
 	ctx.rangeName = range_name;
 	string ret = "import std.conv : to;\n";
-	foreach (n; nodes)
-		ret ~= ctx.getHTMLMixin(n);
+	foreach (i, n; nodes)
+		ret ~= ctx.getHTMLMixin(n, i == 0);
 	ret ~= ctx.flushRawText();
 	return ret;
 }
@@ -80,7 +80,7 @@ unittest {
 	test!"#foo"("<div id=\"foo\"></div>");
 }
 
-private string getHTMLMixin(ref CTX ctx, in Node node)
+private string getHTMLMixin(ref CTX ctx, in Node node, bool first)
 {
 	switch (node.name) {
 		default: return ctx.getElementMixin(node);
@@ -90,9 +90,10 @@ private string getHTMLMixin(ref CTX ctx, in Node node)
 		case Node.SpecialName.hidden: return null;
 		case Node.SpecialName.text:
 			string ret;
-			foreach (c; node.contents)
-				ret ~= ctx.getNodeContentsMixin(c);
-			ret ~= ctx.rawText(node.loc, "\n");
+			if (!first)
+				ret ~= ctx.rawText(node.loc, "\n");
+			foreach (i, c; node.contents)
+				ret ~= ctx.getNodeContentsMixin(c, i == 0);
 			return ret;
 	}
 }
@@ -118,14 +119,14 @@ private string getElementMixin(ref CTX ctx, in Node node)
 			foreach (ca; node.attributes[ai+1 .. $]) {
 				if (ca.name != "class") continue;
 				att.addText(" ");
-				att.addContents(ca.values);
+				att.addContents(ca.contents);
 			}
 		}
 
-		bool is_expr = att.values.length == 1 && att.values[0].kind == AttributeContent.Kind.interpolation;
+		bool is_expr = att.contents.length == 1 && att.contents[0].kind == AttributeContent.Kind.interpolation;
 
 		if (is_expr) {
-			auto expr = att.values[0].value;
+			auto expr = att.contents[0].value;
 
 			if (expr == "true") {
 				if (ctx.isHTML5) ret ~= ctx.rawText(node.loc, " "~att.name);
@@ -148,7 +149,7 @@ private string getElementMixin(ref CTX ctx, in Node node)
 
 		ret ~= ctx.rawText(node.loc, " "~att.name ~ "=\"");
 
-		foreach (i, v; att.values) {
+		foreach (i, v; att.contents) {
 			final switch (v.kind) with (AttributeContent.Kind) {
 				case text:
 					ret ~= ctx.rawText(node.loc, htmlAttribEscape(v.value));
@@ -179,8 +180,8 @@ private string getElementMixin(ref CTX ctx, in Node node)
 
 	// write contents
 	ctx.depth++;
-	foreach (c; node.contents)
-		ret ~= ctx.getNodeContentsMixin(c);
+	foreach (i, c; node.contents)
+		ret ~= ctx.getNodeContentsMixin(c, i == 0);
 	ctx.depth--;
 
 	// write end tag
@@ -189,14 +190,13 @@ private string getElementMixin(ref CTX ctx, in Node node)
 	return ret;
 }
 
-private string getNodeContentsMixin(ref CTX ctx, in NodeContent c)
+private string getNodeContentsMixin(ref CTX ctx, in NodeContent c, bool first)
 {
-	// TODO: translation!
 	final switch (c.kind) with (NodeContent.Kind) {
 		case node:
 			string ret;
 			ret ~= ctx.prettyNewLine(c.loc);
-			ret ~= getHTMLMixin(ctx, c.node);
+			ret ~= getHTMLMixin(ctx, c.node, first);
 			ret ~= ctx.prettyNewLine(c.loc);
 			return ret;
 		case text:
@@ -277,7 +277,7 @@ private string getCodeMixin(ref CTX ctx, in ref Node node)
 			ret ~= ctx.statement(node.loc, "%s {", c.value);
 			got_code = true;
 		} else {
-			ret ~= ctx.getNodeContentsMixin(c);
+			ret ~= ctx.getNodeContentsMixin(c, i == 0);
 		}
 	}
 	ret ~= ctx.statement(node.loc, "}");
@@ -287,8 +287,8 @@ private string getCodeMixin(ref CTX ctx, in ref Node node)
 private string getCommentMixin(ref CTX ctx, in ref Node node)
 {
 	string ret = ctx.rawText(node.loc, "<!--");
-	foreach (c; node.contents)
-		ret ~= ctx.getNodeContentsMixin(c);
+	foreach (i, c; node.contents)
+		ret ~= ctx.getNodeContentsMixin(c, i == 0);
 	ret ~= ctx.rawText(node.loc, "-->");
 	return ret;
 }

@@ -200,15 +200,15 @@ unittest { // test basic functionality
 		new Node(ln(0), Node.SpecialName.code, null, [NodeContent.text("if(x)", ln(0))])
 	]);
 	assert(parseDiet(":foo\n\tbar") == [
-		new Node(ln(0), ":foo", null, [NodeContent.text("bar", ln(1))], NodeAttribs.rawTextNode)
+		new Node(ln(0), ":", [Attribute("filterChain", [AttributeContent.text("foo")])], [
+			NodeContent.text("bar", ln(1))
+		], NodeAttribs.textNode)
 	]);
 	assert(parseDiet(":foo :bar baz") == [
-		new Node(ln(0), ":foo", null, [
-			NodeContent.tag(new Node(ln(0), ":bar", null, [
-				NodeContent.text("baz", ln(0))
-			], NodeAttribs.rawTextNode))
-		])
-	]);
+		new Node(ln(0), ":", [Attribute("filterChain", [AttributeContent.text("foo bar")])], [
+			NodeContent.text("baz", ln(0))
+		], NodeAttribs.textNode)
+	], parseDiet(":foo :bar baz").text);
 
 	// nested nodes
 	assert(parseDiet("a: b") == [
@@ -224,7 +224,7 @@ unittest { // test basic functionality
 			]))
 		]),
 		new Node(ln(2), "d")
-	], parseDiet("a: b\n\tc\nd").text);
+	]);
 
 	// inline nodes
 	assert(parseDiet("a #[b]") == [
@@ -802,24 +802,29 @@ private Node[] parseDietRaw(alias TR)(InputFile file)
 			// filters
 			stack[level] = [];
 
+
+			string chain;
+
 			do {
 				input = input[1 .. $];
 				size_t idx = 0;
-				auto fname = skipIdent(input, idx, "-_", loc);
+				if (chain.length) chain ~= ' ';
+				chain ~= skipIdent(input, idx, "-_", loc);
 				input = input[idx .. $];
-
-				Node chn = new Node;
-				chn.loc = loc;
-				chn.name = ":" ~ fname;
-				stack[level] ~= chn;
-
 				if (input.startsWith(' ')) input = input[1 .. $];
 			} while (input.startsWith(':'));
 
-			stack[level][$-1].attribs = NodeAttribs.rawTextNode;
-			auto tmploc = loc;
+			Node chn = new Node;
+			chn.loc = loc;
+			chn.name = Node.SpecialName.filter;
+			chn.attribs = NodeAttribs.textNode;
+			chn.attributes = [Attribute("filterChain", [AttributeContent.text(chain)])];
+			stack[level] ~= chn;
+
+			/*auto tmploc = loc;
 			auto trailing = skipLine(input, loc);
-			if (trailing.length) stack[level][$-1].addText(trailing, tmploc);
+			if (trailing.length) parseTextLine(input, chn, tmploc);*/
+			parseTextLine(input, chn, loc);
 		} else {
 			// normal tag line
 			bool has_nested;
