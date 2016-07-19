@@ -6,6 +6,23 @@ import diet.dom;
 
 
 /** Marks a struct as a Diet traits container.
+
+	A traits struct can contain any of the following:
+
+	$(UL
+		$(LI `string translate(string)` - A function that takes a `string` and
+			returns the translated version of that string. This is used for
+			translating the text of nodes marked with `&` at compile time. Note
+			that the input string may contain string interpolations.)
+		$(LI `void filterX(string)` - Any number of compile-time filter
+			functions, where "X" is a placeholder for the actual filter name. 
+			The first character will be converted to lower case, so that a
+			function `filterCss` will be available as `:css` within the Diet
+			template.)
+		$(LI `FilterCallback[string] filters` - A dictionary of runtime filter
+			functions that will be used to for filter nodes that don't have an
+			available compile-time filter or contain string interpolations.)
+	)
 */
 @property DietTraitsAttribute dietTraits() { return DietTraitsAttribute.init; }
 
@@ -35,6 +52,7 @@ unittest {
 	assert(dst.data == "TESTING");
 }
 
+
 /** Translates a line of text based on the traits passed to the Diet parser.
 
 	The input text may contain string interpolations of the form `#{...}` or
@@ -52,6 +70,9 @@ string translate(ALIASES...)(string text)
 	return text;
 }
 
+
+/** Applies any transformations that are defined in the 
+*/
 Node[] applyTraits(ALIASES...)(Node[] nodes)
 {
 	import diet.exception;
@@ -109,20 +130,24 @@ Node[] applyTraits(ALIASES...)(Node[] nodes)
 	return nodes;
 }
 
-void registerFilter(string name, FilterCallback filter)
+alias FilterCallback = void delegate(in char[] input, scope CharacterSink output);
+alias CharacterSink = void delegate(in char[]) @safe nothrow;
+
+void filter(ALIASES...)(in char[] input, string filter, CharacterSink output)
 {
-	s_filters[name] = filter;
+	import std.traits : hasUDA;
+
+	foreach (A; ALIASES)
+		static if (hasUDA!(A, DietTraitsAttribute)) {
+			static if (is(typeof(A.filters)))
+				if (auto pf = filter in A.filters) {
+					(*pf)(input, output);
+					return;
+				}
+		}
+	
+	output(input);
 }
-
-void filter(in char[] input, string filter, scope void delegate(in char[]) @safe nothrow output)
-{
-	if (auto pf = filter in s_filters) (*pf)(input, output);
-	else output(input);
-}
-
-alias FilterCallback = void delegate(in char[] input, scope void delegate(in char[]) @safe nothrow output);
-
-FilterCallback[string] s_filters;
 
 private string generateFilterChainMixin(string[] chain, NodeContent[] contents)
 {
@@ -163,7 +188,7 @@ private string generateFilterChainMixin(string[] chain, NodeContent[] contents)
 			oname = format("__f%s_app", i);
 			ret ~= q{auto %s = appender!(char[]);}.format(oname);
 		} else oname = "_output_";
-		ret ~= q{%s.filter("%s", s => %s.put(s));}.format(iname, dstringEscape(f), oname);
+		ret ~= q{%s.filter!ALIASES("%s", s => %s.put(s));}.format(iname, dstringEscape(f), oname);
 		if (i > 0) ret ~= q{auto __f%s = %s.data;}.format(i, oname);
 	}
 
@@ -177,18 +202,19 @@ unittest {
 	@dietTraits
 	static struct CTX {
 		static string filterFoo(string str) { return "("~str~")"; }
+		static FilterCallback[string] filters;
 	}
 
-	registerFilter("foo", (input, scope output) { output("(R"); output(input); output("R)"); });
-	registerFilter("bar", (input, scope output) { output("(RB"); output(input); output("RB)"); });
+	CTX.filters["foo"] = (input, scope output) { output("(R"); output(input); output("R)"); };
+	CTX.filters["bar"] = (input, scope output) { output("(RB"); output(input); output("RB)"); };
 
 	auto dst = appender!string;
 	dst.compileHTMLDietString!(":foo text", CTX);
 	assert(dst.data == "(text)");
 
 	dst = appender!string;
-	dst.compileHTMLDietString!("| text", CTX);
-	assert(dst.data == "text");
+	dst.compileHTMLDietString!(":foo text\n\tmore", CTX);
+	assert(dst.data == "(text\nmore)");
 
 	dst = appender!string;
 	dst.compileHTMLDietString!(":foo :foo text", CTX);
@@ -215,8 +241,8 @@ private bool hasFilterCT(ALIASES...)(string filter)
 	static if (Filters.length) {
 		switch (filter) {
 			default: return false;
-			foreach (F; FiltersFromAliases!ALIASES) {
-				case FilterName!F: return true;
+			foreach (i, F; Filters) {
+				case FilterName!(Filters[i]): return true;
 			}
 		}
 	} else return false;
@@ -228,8 +254,8 @@ private string runFilterCT(ALIASES...)(string text, string filter)
 	static if (Filters.length) {
 		switch (filter) {
 			default: return text; // FIXME: error out?
-			foreach (F; FiltersFromAliases!ALIASES) {
-				case FilterName!F: return F(text);
+			foreach (i, F; Filters) {
+				case FilterName!(Filters[i]): return F(text);
 			}
 		}
 	} else return text; // FIXME: error out?
@@ -259,7 +285,7 @@ private template FiltersFromContext(Context)
 	alias members = AliasSeq!(__traits(allMembers, Context));
 	template impl(size_t i) {
 		static if (i < members.length) {
-			static if (members[i].startsWith("filter") && members[i].length > 6)
+			static if (members[i].startsWith("filter") && members[i].length > 6 && members[i] != "filters")
 				alias impl = AliasSeq!(__traits(getMember, Context, members[i]), impl!(i+1));
 			else alias impl = impl!(i+1);
 		} else alias impl = AliasSeq!();
@@ -273,7 +299,8 @@ private template FilterName(alias FilterFunction)
 	import std.ascii : toLower;
 
 	enum ident = __traits(identifier, FilterFunction);
-	static assert(ident.startsWith("filter") && ident.length > 6,
-		"Filter function must start with \"filter\" and must have a non-zero length suffix");
-	enum FilterName = ident[6].toLower ~ ident[7 .. $];
+	static if (ident.startsWith("filter") && ident.length > 6)
+		enum FilterName = ident[6].toLower ~ ident[7 .. $];
+	else static assert(false,
+		"Filter function must start with \"filter\" and must have a non-zero length suffix: " ~ ident);
 }
