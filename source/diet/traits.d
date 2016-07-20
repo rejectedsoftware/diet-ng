@@ -104,7 +104,7 @@ Node[] applyTraits(ALIASES...)(Node[] nodes)
 		// finally process filters
 		if (n.name == Node.SpecialName.filter) {
 			enforcep(n.isProceduralTextNode, "Only text is supported as filter contents.", n.loc);
-			auto chain = n.getTextAttribute("filterChain").split(' ');
+			auto chain = n.getAttribute("filterChain").expectText().split(' ');
 			n.attributes = null;
 			n.attribs = NodeAttribs.none;
 

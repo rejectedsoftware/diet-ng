@@ -10,6 +10,16 @@ module diet.dom;
 import diet.internal.string;
 
 
+string expectText(const(Attribute) att)
+{
+	import diet.defs : enforcep;
+	if (att.contents.length == 0) return null;
+	enforcep(att.contents.length > 0 && att.contents[0].kind == AttributeContent.Kind.text,
+		"Expected pure text attribute.", att.loc);
+	return att.contents[0].value;
+}
+
+
 /** Represents a single node in the DOM tree.
 */
 class Node {
@@ -72,6 +82,11 @@ class Node {
 		this.attribs = attribs;
 	}
 
+	/// Returns the contents of the "id" attribute.
+	@property inout(AttributeContent)[] id() inout { return getAttribute("id").contents; }
+	/// Returns the contents of the "class" attribute - a white space separated list of style class identifiers.
+	@property inout(AttributeContent)[] class_() inout { return getAttribute("class").contents; }
+
 	/** Adds a piece of text to the node's contents.
 
 		If the node already has some content and the last piece of content is
@@ -124,19 +139,16 @@ class Node {
 	/// Tests if the node consists only of text and interpolations, but doesn't contain child nodes.
 	bool isProceduralTextNode() const { import std.algorithm.searching : all; return contents.all!(c => c.kind != NodeContent.Kind.node); }
 
-	/** Returns the value of a pure text attribute.
+	/** Returns a given named attribute.
 
-		The caller must make sure that the attribute does indeed only contain
-		a single text `AttributeContent`.
+		If the attribute doesn't exist, an empty value will be returned.
 	*/
-	string getTextAttribute(string name)
-	{
-		foreach (a; this.attributes)
-			if (a.name == name) {
-				assert(a.contents.length == 1 && a.contents[0].kind == AttributeContent.Kind.text);
-				return a.contents[0].value;
-			}
-		return null;
+	inout(Attribute) getAttribute(string name)
+	inout {
+		foreach (ref a; this.attributes)
+			if (a.name == name)
+				return a;
+		return Attribute(Location.init, name, null);
 	}
 
 	/// Outputs a simple string representation of the node.
@@ -179,13 +191,15 @@ enum NodeAttribs {
 struct Attribute {
 	@safe nothrow:
 
+	/// Location in source file
+	Location loc;
 	/// Name of the attribute
 	string name;
 	/// Value of the attribute
 	AttributeContent[] contents;
 
 	/// Creates a copy of the attribute.
-	@property Attribute dup() const { return Attribute(name, contents.dup); }
+	@property Attribute dup() const { return Attribute(loc, name, contents.dup); }
 
 	/** Appends raw text to the attribute.
 

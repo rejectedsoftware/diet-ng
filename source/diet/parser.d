@@ -86,26 +86,26 @@ unittest { // test basic functionality
 	// node with id and classes
 	assert(parseDiet("test#id.cls1.cls2") == [
 		new Node(ln(0), "test", [
-			Attribute("id", [AttributeContent.text("id")]),
-			Attribute("class", [AttributeContent.text("cls1")]),
-			Attribute("class", [AttributeContent.text("cls2")])
+			Attribute(ln(0), "id", [AttributeContent.text("id")]),
+			Attribute(ln(0), "class", [AttributeContent.text("cls1")]),
+			Attribute(ln(0), "class", [AttributeContent.text("cls2")])
 		])
 	]);
 
 	// empty tag name (only class)
 	assert(parseDiet(".foo") == [
 		new Node(ln(0), "", [
-			Attribute("class", [AttributeContent.text("foo")])
+			Attribute(ln(0), "class", [AttributeContent.text("foo")])
 		])
 	]);
 	assert(parseDiet("a.download-button\n\t.bs-hbtn.right.black") == [
 		new Node(ln(0), "a", [
-			Attribute("class", [AttributeContent.text("download-button")]),
+			Attribute(ln(0), "class", [AttributeContent.text("download-button")]),
 		], [
 			NodeContent.tag(new Node(ln(1), "", [
-				Attribute("class", [AttributeContent.text("bs-hbtn")]),
-				Attribute("class", [AttributeContent.text("right")]),
-				Attribute("class", [AttributeContent.text("black")])
+				Attribute(ln(1), "class", [AttributeContent.text("bs-hbtn")]),
+				Attribute(ln(1), "class", [AttributeContent.text("right")]),
+				Attribute(ln(1), "class", [AttributeContent.text("black")])
 			]))
 		])
 	], text(parseDiet("a\n\t.bs-hbtn.right.black")));
@@ -113,15 +113,15 @@ unittest { // test basic functionality
 	// empty tag name (only id)
 	assert(parseDiet("#foo") == [
 		new Node(ln(0), "", [
-			Attribute("id", [AttributeContent.text("foo")])
+			Attribute(ln(0), "id", [AttributeContent.text("foo")])
 		])
 	]);
 
 	// node with attributes
 	assert(parseDiet("test(foo1=\"bar\", foo2=2+3)") == [
 		new Node(ln(0), "test", [
-			Attribute("foo1", [AttributeContent.text("bar")]),
-			Attribute("foo2", [AttributeContent.interpolation("2+3")])
+			Attribute(ln(0), "foo1", [AttributeContent.text("bar")]),
+			Attribute(ln(0), "foo2", [AttributeContent.interpolation("2+3")])
 		])
 	]);
 
@@ -173,7 +173,7 @@ unittest { // test basic functionality
 	// interpolated attribute text
 	assert(parseDiet("foo(att='hello #{\"world\"} #bar')") == [
 		new Node(ln(0), "foo", [
-			Attribute("att", [
+			Attribute(ln(0), "att", [
 				AttributeContent.text("hello "),
 				AttributeContent.interpolation(`"world"`),
 				AttributeContent.text(" #bar")
@@ -184,7 +184,7 @@ unittest { // test basic functionality
 	// attribute expression
 	assert(parseDiet("foo(att=1+2)") == [
 		new Node(ln(0), "foo", [
-			Attribute("att", [
+			Attribute(ln(0), "att", [
 				AttributeContent.interpolation(`1+2`),
 			])
 		])
@@ -219,12 +219,12 @@ unittest { // test basic functionality
 		new Node(ln(0), Node.SpecialName.code, null, [NodeContent.text("if(x)", ln(0))])
 	]);
 	assert(parseDiet(":foo\n\tbar") == [
-		new Node(ln(0), ":", [Attribute("filterChain", [AttributeContent.text("foo")])], [
+		new Node(ln(0), ":", [Attribute(ln(0), "filterChain", [AttributeContent.text("foo")])], [
 			NodeContent.text("bar", ln(1))
 		], NodeAttribs.textNode)
 	]);
 	assert(parseDiet(":foo :bar baz") == [
-		new Node(ln(0), ":", [Attribute("filterChain", [AttributeContent.text("foo bar")])], [
+		new Node(ln(0), ":", [Attribute(ln(0), "filterChain", [AttributeContent.text("foo bar")])], [
 			NodeContent.text("baz", ln(0))
 		], NodeAttribs.textNode)
 	], parseDiet(":foo :bar baz").text);
@@ -280,7 +280,7 @@ unittest {
 	// angular2 html attributes tests
 	assert(parseDiet("div([value]=\"firstName\")") == [
 		new Node(ln(0), "div", [
-			Attribute("[value]", [
+			Attribute(ln(0), "[value]", [
 				AttributeContent.text("firstName"),
 			])
 		])
@@ -288,7 +288,7 @@ unittest {
 
 	assert(parseDiet("div([attr.role]=\"myRole\")") == [
 		new Node(ln(0), "div", [
-			Attribute("[attr.role]", [
+			Attribute(ln(0), "[attr.role]", [
 				AttributeContent.text("myRole"),
 			])
 		])
@@ -296,7 +296,7 @@ unittest {
 
 	assert(parseDiet("div([attr.role]=\"{foo:myRole}\")") == [
 		new Node(ln(0), "div", [
-			Attribute("[attr.role]", [
+			Attribute(ln(0), "[attr.role]", [
 				AttributeContent.text("{foo:myRole}"),
 			])
 		])
@@ -304,7 +304,7 @@ unittest {
 
 	assert(parseDiet("div([attr.role]=\"{foo:myRole, bar:MyRole}\")") == [
 		new Node(ln(0), "div", [
-			Attribute("[attr.role]", [
+			Attribute(ln(0), "[attr.role]", [
 				AttributeContent.text("{foo:myRole, bar:MyRole}")
 			])
 		])
@@ -312,7 +312,7 @@ unittest {
 
 	assert(parseDiet("div((attr.role)=\"{foo:myRole, bar:MyRole}\")") == [
 		new Node(ln(0), "div", [
-			Attribute("(attr.role)", [
+			Attribute(ln(0), "(attr.role)", [
 				AttributeContent.text("{foo:myRole, bar:MyRole}")
 			])
 		])
@@ -320,7 +320,7 @@ unittest {
 
 	assert(parseDiet("div([class.extra-sparkle]=\"isDelightful\")") == [
 		new Node(ln(0), "div", [
-			Attribute("[class.extra-sparkle]", [
+			Attribute(ln(0), "[class.extra-sparkle]", [
 				AttributeContent.text("isDelightful")
 			])
 		])
@@ -329,7 +329,7 @@ unittest {
 	auto t = parseDiet("div((click)=\"readRainbow($event)\")");
 	assert(t == [
 		new Node(ln(0), "div", [
-			Attribute("(click)", [
+			Attribute(ln(0), "(click)", [
 				AttributeContent.text("readRainbow($event)")
 			])
 		])
@@ -337,7 +337,7 @@ unittest {
 
 	assert(parseDiet("div([(title)]=\"name\")") == [
 		new Node(ln(0), "div", [
-			Attribute("[(title)]", [
+			Attribute(ln(0), "[(title)]", [
 				AttributeContent.text("name")
 			])
 		])
@@ -345,7 +345,7 @@ unittest {
 
 	assert(parseDiet("div(*myUnless=\"myExpression\")") == [
 		new Node(ln(0), "div", [
-			Attribute("*myUnless", [
+			Attribute(ln(0), "*myUnless", [
 				AttributeContent.text("myExpression")
 			])
 		])
@@ -353,7 +353,7 @@ unittest {
 
 	assert(parseDiet("div([ngClass]=\"{active: isActive, disabled: isDisabled}\")") == [
 		new Node(ln(0), "div", [
-			Attribute("[ngClass]", [
+			Attribute(ln(0), "[ngClass]", [
 				AttributeContent.text("{active: isActive, disabled: isDisabled}")
 			])
 		])
@@ -362,7 +362,7 @@ unittest {
 	t = parseDiet("div(*ngFor=\"\\#item of list\")");
 	assert(t == [
 		new Node(ln(0), "div", [
-			Attribute("*ngFor", [
+			Attribute(ln(0), "*ngFor", [
 				AttributeContent.text("#"),
 				AttributeContent.text("item of list")
 			])
@@ -372,7 +372,7 @@ unittest {
 	t = parseDiet("div(({*ngFor})=\"{args:\\#item of list}\")");
 	assert(t == [
 		new Node(ln(0), "div", [
-			Attribute("({*ngFor})", [
+			Attribute(ln(0), "({*ngFor})", [
 				AttributeContent.text("{args:"),
 				AttributeContent.text("#"),
 				AttributeContent.text("item of list}")
@@ -842,7 +842,7 @@ Node[] parseDietRaw(alias TR)(InputFile file)
 			chn.loc = loc;
 			chn.name = Node.SpecialName.filter;
 			chn.attribs = NodeAttribs.textNode;
-			chn.attributes = [Attribute("filterChain", [AttributeContent.text(chain)])];
+			chn.attributes = [Attribute(loc, "filterChain", [AttributeContent.text(chain)])];
 			stack[level] ~= chn;
 
 			/*auto tmploc = loc;
@@ -950,7 +950,7 @@ private bool parseTag(ref string input, ref size_t idx, ref Node dst, ref bool h
 		idx++;
 		auto value = skipIdent(input, idx, "-_", loc);
 		enforcep(value.length > 0, "Expected id.", loc);
-		dst.attributes ~= Attribute("id", [AttributeContent(AttributeContent.Kind.text, value)]);
+		dst.attributes ~= Attribute(loc, "id", [AttributeContent(AttributeContent.Kind.text, value)]);
 	}
 
 	// node classes
@@ -960,7 +960,7 @@ private bool parseTag(ref string input, ref size_t idx, ref Node dst, ref bool h
 		idx++;
 		auto value = skipIdent(input, idx, "-_", loc);
 		enforcep(value.length > 0, "Expected class name identifier.", loc);
-		dst.attributes ~= Attribute("class", [AttributeContent(AttributeContent.Kind.text, value)]);
+		dst.attributes ~= Attribute(loc, "class", [AttributeContent(AttributeContent.Kind.text, value)]);
 	}
 
 	// generic attributes
@@ -1161,9 +1161,9 @@ private void parseAttributes(ref string input, ref size_t i, ref Node node, in r
 		if (isStringLiteral(value)) {
 			AttributeContent[] content;
 			parseAttributeText(value[1 .. $-1], content, loc);
-			node.attributes ~= Attribute(name, content);
+			node.attributes ~= Attribute(loc, name, content);
 		} else {
-			node.attributes ~= Attribute(name, [AttributeContent.interpolation(value)]);
+			node.attributes ~= Attribute(loc, name, [AttributeContent.interpolation(value)]);
 		}
 	}
 
