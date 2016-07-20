@@ -17,7 +17,17 @@ enum dietOutputRangeName = "_diet_output";
 alias DietParserException = Exception;
 
 
-package void enforcep(bool cond, lazy string text, in ref Location loc)
+/** Throws an exception if the condition evaluates to `false`.
+
+	This function will generate a proper error message including file and line
+	number when called at compile time. An assertion is used in this case
+	instead of an exception:
+
+	Throws:
+		Throws a `DietParserException` when called with a `false` condition at
+		run time.
+*/
+void enforcep(bool cond, lazy string text, in ref Location loc)
 {
 	if (__ctfe) {
 		import std.conv : to;
