@@ -82,10 +82,10 @@ class Node {
 		this.attribs = attribs;
 	}
 
-	/// Returns the contents of the "id" attribute.
-	@property inout(AttributeContent)[] id() inout { return getAttribute("id").contents; }
-	/// Returns the contents of the "class" attribute - a white space separated list of style class identifiers.
-	@property inout(AttributeContent)[] class_() inout { return getAttribute("class").contents; }
+	/// Returns the "id" attribute.
+	@property inout(Attribute) id() inout { return getAttribute("id"); }
+	/// Returns "class" attribute - a white space separated list of style class identifiers.
+	@property inout(Attribute) class_() inout { return getAttribute("class"); }
 
 	/** Adds a piece of text to the node's contents.
 
@@ -149,6 +149,16 @@ class Node {
 			if (a.name == name)
 				return a;
 		return Attribute(Location.init, name, null);
+	}
+
+	void setAttribute(Attribute att)
+	{
+		foreach (ref da; attributes)
+			if (da.name == att.name) {
+				da = att;
+				return;
+			}
+		attributes ~= att;
 	}
 
 	/// Outputs a simple string representation of the node.
