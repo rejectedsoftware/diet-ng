@@ -19,6 +19,15 @@ string expectText(const(Attribute) att)
 	return att.contents[0].value;
 }
 
+string expectText(const(Node) n)
+{
+	import diet.defs : enforcep;
+	if (n.contents.length == 0) return null;
+	enforcep(n.contents.length > 0 && n.contents[0].kind == NodeContent.Kind.text,
+		"Expected pure text node.", n.loc);
+	return n.contents[0].value;
+}
+
 
 /** Represents a single node in the DOM tree.
 */
