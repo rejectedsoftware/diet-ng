@@ -206,6 +206,12 @@ unittest { // test basic functionality
 	assert(parseDiet("|text") == [
 		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text("text", ln(0))])
 	]);
+	assert(parseDiet("|text\n") == [
+		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text("text", ln(0))])
+	]);
+	assert(parseDiet("| text\n") == [
+		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text("text", ln(0))])
+	]);
 	assert(parseDiet("|.") == [
 		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text(".", ln(0))])
 	]);
@@ -912,17 +918,18 @@ private Node parseTagLine(alias TR)(ref string input, ref Location loc, out bool
 		ret.contents ~= NodeContent.interpolation(ctstrip(skipLine(input, idx, loc)), l);
 		input = input[idx .. $];
 	} else {
+		auto tmploc = loc;
 		auto remainder = skipLine(input, idx, loc);
 		input = input[idx .. $];
 
 		if (remainder.length && remainder[0] == ' ') {
 			// parse the rest of the line as text contents (if any non-ws)
 			remainder = TR(remainder[1 .. $]);
-			parseTextLine(remainder, ret, loc);
+			parseTextLine(remainder, ret, tmploc);
 		} else if (ret.name == Node.SpecialName.text) {
 			// allow omitting the whitespace for "|" text nodes
 			remainder = TR(remainder);
-			parseTextLine(remainder, ret, loc);
+			parseTextLine(remainder, ret, tmploc);
 		} else {
 			import std.string : strip;
 			enforcep(remainder.strip().length == 0,
