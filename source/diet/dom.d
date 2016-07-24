@@ -14,8 +14,7 @@ string expectText(const(Attribute) att)
 {
 	import diet.defs : enforcep;
 	if (att.contents.length == 0) return null;
-	enforcep(att.contents.length > 0 && att.contents[0].kind == AttributeContent.Kind.text,
-		"Expected pure text attribute.", att.loc);
+	enforcep(att.isText, "Expected pure text attribute.", att.loc);
 	return att.contents[0].value;
 }
 
@@ -23,10 +22,13 @@ string expectText(const(Node) n)
 {
 	import diet.defs : enforcep;
 	if (n.contents.length == 0) return null;
-	enforcep(n.contents.length > 0 && n.contents[0].kind == NodeContent.Kind.text,
+	enforcep(n.contents.length > 0 && n.contents[0].kind == NodeContent.Kind.text &&
+		(n.contents.length == 1 || n.contents[1].kind != NodeContent.Kind.node),
 		"Expected pure text node.", n.loc);
 	return n.contents[0].value;
 }
+
+bool isText(const(Attribute) att) { return att.contents.length == 0 || att.contents.length == 1 && att.contents[0].kind == AttributeContent.Kind.text; }
 
 
 /** Represents a single node in the DOM tree.
