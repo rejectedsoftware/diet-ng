@@ -7,4 +7,5 @@ void main()
 	auto dst = file.lockingTextWriter;
 	int iterations = 10;
 	dst.compileHTMLDietFile!("index.dt", iterations);
+	writeln("Generated index.html.");
 }
