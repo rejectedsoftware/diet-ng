@@ -20,12 +20,10 @@ Example
 			title #{title} - example page
 		body
 			h1= title
-
 			h2 Index
 			ol.pageindex
 				- foreach (i; 0 .. 3)
 					li: a(href="##{i}") Point #{i}
-
 			- foreach (i; 0 .. 3)
 				h2(id=i) Point #{i}
 				p.
