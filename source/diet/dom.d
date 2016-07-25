@@ -30,6 +30,14 @@ string expectText(const(Node) n)
 
 bool isText(const(Attribute) att) { return att.contents.length == 0 || att.contents.length == 1 && att.contents[0].kind == AttributeContent.Kind.text; }
 
+/** Encapsulates a full Diet template document.
+*/
+class Document {
+	Node[] nodes;
+
+	this(Node[] nodes) { this.nodes = nodes; }
+}
+
 
 /** Represents a single node in the DOM tree.
 */

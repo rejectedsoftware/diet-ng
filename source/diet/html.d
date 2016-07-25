@@ -27,14 +27,14 @@ import diet.traits;
 template compileHTMLDietFile(string filename, ALIASES...)
 {
 	pragma(msg, "Compiling Diet HTML template "~filename~"...");
-	enum _diet_nodes = applyTraits!ALIASES(parseDiet!(translate!ALIASES)(collectFiles!filename));
+	Document _diet_nodes() { return applyTraits!ALIASES(parseDiet!(translate!ALIASES)(collectFiles!filename)); }
 
 	// uses the correct range name and removes 'dst' from the scope
-	static void exec(R)(ref R _diet_output)
+	void exec(R)(ref R _diet_output)
 	{
 		mixin(localAliasesMixin!(0, ALIASES));
 		//pragma(msg, getHTMLMixin(nodes));
-		mixin(getHTMLMixin(_diet_nodes));
+		mixin(getHTMLMixin(_diet_nodes()));
 	}
 
 	void compileHTMLDietFile(R)(ref R dst)
@@ -80,14 +80,14 @@ template compileHTMLDietString(string contents, ALIASES...)
 */
 template compileHTMLDietStrings(alias FILES_GROUP, ALIASES...)
 {
-	enum _diet_nodes = applyTraits!ALIASES(parseDiet!(translate!ALIASES)(filesFromGroup!FILES_GROUP));
+	static Document _diet_nodes() { return applyTraits!ALIASES(parseDiet!(translate!ALIASES)(filesFromGroup!FILES_GROUP)); }
 
 	// uses the correct range name and removes 'dst' from the scope
 	static void exec(R)(ref R _diet_output)
 	{
 		mixin(localAliasesMixin!(0, ALIASES));
 		//pragma(msg, getHTMLMixin(nodes));
-		mixin(getHTMLMixin(_diet_nodes));
+		mixin(getHTMLMixin(_diet_nodes()));
 	}
 
 	void compileHTMLDietStrings(R)(ref R dst)
@@ -106,12 +106,12 @@ template compileHTMLDietStrings(alias FILES_GROUP, ALIASES...)
 	Returns:
 		A string of D statements suitable to be mixed in inside of a function.
 */
-string getHTMLMixin(in Node[] nodes, string range_name = dietOutputRangeName)
+string getHTMLMixin(in Document doc, string range_name = dietOutputRangeName)
 {
 	CTX ctx;
 	ctx.rangeName = range_name;
 	string ret = "import std.conv : to;\n";
-	foreach (i, n; nodes)
+	foreach (i, n; doc.nodes)
 		ret ~= ctx.getHTMLMixin(n, i == 0);
 	ret ~= ctx.flushRawText();
 	return ret;

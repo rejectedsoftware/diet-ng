@@ -47,7 +47,7 @@ import std.range.primitives : empty, front, popFront, popFrontN;
 	Returns:
 		The list of parsed root nodes is returned.
 */
-Node[] parseDiet(alias TR = identity)(string text, string filename = "string")
+Document parseDiet(alias TR = identity)(string text, string filename = "string")
 	if (is(typeof(TR(string.init)) == string))
 {
 	InputFile[1] f;
@@ -56,14 +56,14 @@ Node[] parseDiet(alias TR = identity)(string text, string filename = "string")
 	return parseDiet!TR(f);
 }
 
-Node[] parseDiet(alias TR = identity)(InputFile[] files)
+Document parseDiet(alias TR = identity)(InputFile[] files)
 	if (is(typeof(TR(string.init)) == string))
 {
 	import diet.traits;
 	import std.algorithm.iteration : map;
 	import std.array : array;
 	FileInfo[] parsed_files = files.map!(f => FileInfo(f.name, parseDietRaw!TR(f))).array;
-	return parseDietWithExtensions(parsed_files, 0, null, null);
+	return new Document(parseDietWithExtensions(parsed_files, 0, null, null));
 }
 
 unittest { // test basic functionality
@@ -72,19 +72,19 @@ unittest { // test basic functionality
 	Location ln(int l) { return Location("string", l); }
 
 	// simple node
-	assert(parseDiet("test") == [
+	assert(parseDiet("test").nodes == [
 		new Node(ln(0), "test")
 	]);
 
 	// nested nodes
-	assert(parseDiet("foo\n  bar") == [
+	assert(parseDiet("foo\n  bar").nodes == [
 		new Node(ln(0), "foo", null, [
 			NodeContent.tag(new Node(ln(1), "bar"))
 		])
 	]);
 
 	// node with id and classes
-	assert(parseDiet("test#id.cls1.cls2") == [
+	assert(parseDiet("test#id.cls1.cls2").nodes == [
 		new Node(ln(0), "test", [
 			Attribute(ln(0), "id", [AttributeContent.text("id")]),
 			Attribute(ln(0), "class", [AttributeContent.text("cls1")]),
@@ -93,12 +93,12 @@ unittest { // test basic functionality
 	]);
 
 	// empty tag name (only class)
-	assert(parseDiet(".foo") == [
+	assert(parseDiet(".foo").nodes == [
 		new Node(ln(0), "", [
 			Attribute(ln(0), "class", [AttributeContent.text("foo")])
 		])
 	]);
-	assert(parseDiet("a.download-button\n\t.bs-hbtn.right.black") == [
+	assert(parseDiet("a.download-button\n\t.bs-hbtn.right.black").nodes == [
 		new Node(ln(0), "a", [
 			Attribute(ln(0), "class", [AttributeContent.text("download-button")]),
 		], [
@@ -108,17 +108,17 @@ unittest { // test basic functionality
 				Attribute(ln(1), "class", [AttributeContent.text("black")])
 			]))
 		])
-	], text(parseDiet("a\n\t.bs-hbtn.right.black")));
+	]);
 
 	// empty tag name (only id)
-	assert(parseDiet("#foo") == [
+	assert(parseDiet("#foo").nodes == [
 		new Node(ln(0), "", [
 			Attribute(ln(0), "id", [AttributeContent.text("foo")])
 		])
 	]);
 
 	// node with attributes
-	assert(parseDiet("test(foo1=\"bar\", foo2=2+3)") == [
+	assert(parseDiet("test(foo1=\"bar\", foo2=2+3)").nodes == [
 		new Node(ln(0), "test", [
 			Attribute(ln(0), "foo1", [AttributeContent.text("bar")]),
 			Attribute(ln(0), "foo2", [AttributeContent.interpolation("2+3")])
@@ -126,22 +126,22 @@ unittest { // test basic functionality
 	]);
 
 	// node with pure text contents
-	assert(parseDiet("foo.\n\thello\n\t   world") == [
+	assert(parseDiet("foo.\n\thello\n\t   world").nodes == [
 		new Node(ln(0), "foo", null, [
 			NodeContent.text("hello", ln(1)),
 			NodeContent.text("\n   world", ln(2))
 		], NodeAttribs.textNode)
-	], text(parseDiet("foo.\n\thello\n\t   world")));
+	]);
 
 	// translated text
-	assert(parseDiet("foo& test") == [
+	assert(parseDiet("foo& test").nodes == [
 		new Node(ln(0), "foo", null, [
 			NodeContent.text("test", ln(0))
 		], NodeAttribs.translated)
 	]);
 
 	// interpolated text
-	assert(parseDiet("foo hello #{\"world\"} #bar \\#{baz}") == [
+	assert(parseDiet("foo hello #{\"world\"} #bar \\#{baz}").nodes == [
 		new Node(ln(0), "foo", null, [
 			NodeContent.text("hello ", ln(0)),
 			NodeContent.interpolation(`"world"`, ln(0)),
@@ -150,28 +150,28 @@ unittest { // test basic functionality
 	]);
 
 	// expression
-	assert(parseDiet("foo= 1+2") == [
+	assert(parseDiet("foo= 1+2").nodes == [
 		new Node(ln(0), "foo", null, [
 			NodeContent.interpolation(`1+2`, ln(0)),
 		])
 	]);
 
 	// expression with empty tag name
-	assert(parseDiet("= 1+2") == [
+	assert(parseDiet("= 1+2").nodes == [
 		new Node(ln(0), "", null, [
 			NodeContent.interpolation(`1+2`, ln(0)),
 		])
 	]);
 
 	// raw expression
-	assert(parseDiet("foo!= 1+2") == [
+	assert(parseDiet("foo!= 1+2").nodes == [
 		new Node(ln(0), "foo", null, [
 			NodeContent.rawInterpolation(`1+2`, ln(0)),
 		])
 	]);
 
 	// interpolated attribute text
-	assert(parseDiet("foo(att='hello #{\"world\"} #bar')") == [
+	assert(parseDiet("foo(att='hello #{\"world\"} #bar')").nodes == [
 		new Node(ln(0), "foo", [
 			Attribute(ln(0), "att", [
 				AttributeContent.text("hello "),
@@ -182,7 +182,7 @@ unittest { // test basic functionality
 	]);
 
 	// attribute expression
-	assert(parseDiet("foo(att=1+2)") == [
+	assert(parseDiet("foo(att=1+2)").nodes == [
 		new Node(ln(0), "foo", [
 			Attribute(ln(0), "att", [
 				AttributeContent.interpolation(`1+2`),
@@ -191,58 +191,58 @@ unittest { // test basic functionality
 	]);
 
 	// special nodes
-	assert(parseDiet("//comment") == [
+	assert(parseDiet("//comment").nodes == [
 		new Node(ln(0), Node.SpecialName.comment, null, [NodeContent.text("comment", ln(0))], NodeAttribs.rawTextNode)
 	]);
-	assert(parseDiet("//-hide") == [
+	assert(parseDiet("//-hide").nodes == [
 		new Node(ln(0), Node.SpecialName.hidden, null, [NodeContent.text("hide", ln(0))], NodeAttribs.rawTextNode)
 	]);
-	assert(parseDiet("!!! 5") == [
+	assert(parseDiet("!!! 5").nodes == [
 		new Node(ln(0), "doctype", null, [NodeContent.text("5", ln(0))])
 	]);
-	assert(parseDiet("<inline>") == [
+	assert(parseDiet("<inline>").nodes == [
 		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text("<inline>", ln(0))])
 	]);
-	assert(parseDiet("|text") == [
+	assert(parseDiet("|text").nodes == [
 		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text("text", ln(0))])
 	]);
-	assert(parseDiet("|text\n") == [
+	assert(parseDiet("|text\n").nodes == [
 		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text("text", ln(0))])
 	]);
-	assert(parseDiet("| text\n") == [
+	assert(parseDiet("| text\n").nodes == [
 		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text("text", ln(0))])
 	]);
-	assert(parseDiet("|.") == [
+	assert(parseDiet("|.").nodes == [
 		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text(".", ln(0))])
 	]);
-	assert(parseDiet("|:") == [
+	assert(parseDiet("|:").nodes == [
 		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text(":", ln(0))])
 	]);
-	assert(parseDiet("|&x") == [
+	assert(parseDiet("|&x").nodes == [
 		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text("x", ln(0))], NodeAttribs.translated)
 	]);
-	assert(parseDiet("-if(x)") == [
+	assert(parseDiet("-if(x)").nodes == [
 		new Node(ln(0), Node.SpecialName.code, null, [NodeContent.text("if(x)", ln(0))])
 	]);
-	assert(parseDiet(":foo\n\tbar") == [
+	assert(parseDiet(":foo\n\tbar").nodes == [
 		new Node(ln(0), ":", [Attribute(ln(0), "filterChain", [AttributeContent.text("foo")])], [
 			NodeContent.text("bar", ln(1))
 		], NodeAttribs.textNode)
 	]);
-	assert(parseDiet(":foo :bar baz") == [
+	assert(parseDiet(":foo :bar baz").nodes == [
 		new Node(ln(0), ":", [Attribute(ln(0), "filterChain", [AttributeContent.text("foo bar")])], [
 			NodeContent.text("baz", ln(0))
 		], NodeAttribs.textNode)
 	], parseDiet(":foo :bar baz").text);
 
 	// nested nodes
-	assert(parseDiet("a: b") == [
+	assert(parseDiet("a: b").nodes == [
 		new Node(ln(0), "a", null, [
 			NodeContent.tag(new Node(ln(0), "b"))
 		])
 	]);
 
-	assert(parseDiet("a: b\n\tc\nd") == [
+	assert(parseDiet("a: b\n\tc\nd").nodes == [
 		new Node(ln(0), "a", null, [
 			NodeContent.tag(new Node(ln(0), "b", null, [
 				NodeContent.tag(new Node(ln(1), "c"))
@@ -252,12 +252,12 @@ unittest { // test basic functionality
 	]);
 
 	// inline nodes
-	assert(parseDiet("a #[b]") == [
+	assert(parseDiet("a #[b]").nodes == [
 		new Node(ln(0), "a", null, [
 			NodeContent.tag(new Node(ln(0), "b"))
 		])
 	]);
-	assert(parseDiet("a #[b #[c d]]") == [
+	assert(parseDiet("a #[b #[c d]]").nodes == [
 		new Node(ln(0), "a", null, [
 			NodeContent.tag(new Node(ln(0), "b", null, [
 				NodeContent.tag(new Node(ln(0), "c", null, [
@@ -268,13 +268,13 @@ unittest { // test basic functionality
 	]);
 
 	// whitespace fitting
-	assert(parseDiet("a<>") == [
+	assert(parseDiet("a<>").nodes == [
 		new Node(ln(0), "a", null, [], NodeAttribs.fitInside|NodeAttribs.fitOutside)
 	]);
-	assert(parseDiet("a<") == [
+	assert(parseDiet("a<").nodes == [
 		new Node(ln(0), "a", null, [], NodeAttribs.fitInside)
 	]);
-	assert(parseDiet("a>") == [
+	assert(parseDiet("a>").nodes == [
 		new Node(ln(0), "a", null, [], NodeAttribs.fitOutside)
 	]);
 }
@@ -284,7 +284,7 @@ unittest {
 	Location ln(int l) { return Location("string", l); }
 
 	// angular2 html attributes tests
-	assert(parseDiet("div([value]=\"firstName\")") == [
+	assert(parseDiet("div([value]=\"firstName\")").nodes == [
 		new Node(ln(0), "div", [
 			Attribute(ln(0), "[value]", [
 				AttributeContent.text("firstName"),
@@ -292,7 +292,7 @@ unittest {
 		])
 	]);
 
-	assert(parseDiet("div([attr.role]=\"myRole\")") == [
+	assert(parseDiet("div([attr.role]=\"myRole\")").nodes == [
 		new Node(ln(0), "div", [
 			Attribute(ln(0), "[attr.role]", [
 				AttributeContent.text("myRole"),
@@ -300,7 +300,7 @@ unittest {
 		])
 	]);
 
-	assert(parseDiet("div([attr.role]=\"{foo:myRole}\")") == [
+	assert(parseDiet("div([attr.role]=\"{foo:myRole}\")").nodes == [
 		new Node(ln(0), "div", [
 			Attribute(ln(0), "[attr.role]", [
 				AttributeContent.text("{foo:myRole}"),
@@ -308,7 +308,7 @@ unittest {
 		])
 	]);
 
-	assert(parseDiet("div([attr.role]=\"{foo:myRole, bar:MyRole}\")") == [
+	assert(parseDiet("div([attr.role]=\"{foo:myRole, bar:MyRole}\")").nodes == [
 		new Node(ln(0), "div", [
 			Attribute(ln(0), "[attr.role]", [
 				AttributeContent.text("{foo:myRole, bar:MyRole}")
@@ -316,7 +316,7 @@ unittest {
 		])
 	]);
 
-	assert(parseDiet("div((attr.role)=\"{foo:myRole, bar:MyRole}\")") == [
+	assert(parseDiet("div((attr.role)=\"{foo:myRole, bar:MyRole}\")").nodes == [
 		new Node(ln(0), "div", [
 			Attribute(ln(0), "(attr.role)", [
 				AttributeContent.text("{foo:myRole, bar:MyRole}")
@@ -324,7 +324,7 @@ unittest {
 		])
 	]);
 
-	assert(parseDiet("div([class.extra-sparkle]=\"isDelightful\")") == [
+	assert(parseDiet("div([class.extra-sparkle]=\"isDelightful\")").nodes == [
 		new Node(ln(0), "div", [
 			Attribute(ln(0), "[class.extra-sparkle]", [
 				AttributeContent.text("isDelightful")
@@ -333,15 +333,15 @@ unittest {
 	]);
 
 	auto t = parseDiet("div((click)=\"readRainbow($event)\")");
-	assert(t == [
+	assert(t.nodes == [
 		new Node(ln(0), "div", [
 			Attribute(ln(0), "(click)", [
 				AttributeContent.text("readRainbow($event)")
 			])
 		])
-	], to!string(t));
+	]);
 
-	assert(parseDiet("div([(title)]=\"name\")") == [
+	assert(parseDiet("div([(title)]=\"name\")").nodes == [
 		new Node(ln(0), "div", [
 			Attribute(ln(0), "[(title)]", [
 				AttributeContent.text("name")
@@ -349,7 +349,7 @@ unittest {
 		])
 	]);
 
-	assert(parseDiet("div(*myUnless=\"myExpression\")") == [
+	assert(parseDiet("div(*myUnless=\"myExpression\")").nodes == [
 		new Node(ln(0), "div", [
 			Attribute(ln(0), "*myUnless", [
 				AttributeContent.text("myExpression")
@@ -357,7 +357,7 @@ unittest {
 		])
 	]);
 
-	assert(parseDiet("div([ngClass]=\"{active: isActive, disabled: isDisabled}\")") == [
+	assert(parseDiet("div([ngClass]=\"{active: isActive, disabled: isDisabled}\")").nodes == [
 		new Node(ln(0), "div", [
 			Attribute(ln(0), "[ngClass]", [
 				AttributeContent.text("{active: isActive, disabled: isDisabled}")
@@ -366,17 +366,17 @@ unittest {
 	]);
 
 	t = parseDiet("div(*ngFor=\"\\#item of list\")");
-	assert(t == [
+	assert(t.nodes == [
 		new Node(ln(0), "div", [
 			Attribute(ln(0), "*ngFor", [
 				AttributeContent.text("#"),
 				AttributeContent.text("item of list")
 			])
 		])
-	], to!string(t));
+	]);
 
 	t = parseDiet("div(({*ngFor})=\"{args:\\#item of list}\")");
-	assert(t == [
+	assert(t.nodes == [
 		new Node(ln(0), "div", [
 			Attribute(ln(0), "({*ngFor})", [
 				AttributeContent.text("{args:"),
@@ -384,7 +384,7 @@ unittest {
 				AttributeContent.text("item of list}")
 			])
 		])
-	], to!string(t));
+	]);
 }
 
 unittest { // translation
@@ -395,13 +395,13 @@ unittest { // translation
 
 	static string tr(string str) { return "("~toUpper(str)~")"; }
 
-	assert(parseDiet!tr("foo& test") == [
+	assert(parseDiet!tr("foo& test").nodes == [
 		new Node(ln(0), "foo", null, [
 			NodeContent.text("(TEST)", ln(0))
 		], NodeAttribs.translated)
 	], to!string(parseDiet!tr("foo& test")));
 
-	assert(parseDiet!tr("foo& test #{x} it") == [
+	assert(parseDiet!tr("foo& test #{x} it").nodes == [
 		new Node(ln(0), "foo", null, [
 			NodeContent.text("(TEST ", ln(0)),
 			NodeContent.interpolation("X", ln(0)),
@@ -409,16 +409,16 @@ unittest { // translation
 		], NodeAttribs.translated)
 	]);
 
-	assert(parseDiet!tr("|&x") == [
+	assert(parseDiet!tr("|&x").nodes == [
 		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text("(X)", ln(0))], NodeAttribs.translated)
 	]);
 
-	assert(parseDiet!tr("foo&.\n\tbar\n\tbaz") == [
+	assert(parseDiet!tr("foo&.\n\tbar\n\tbaz").nodes == [
 		new Node(ln(0), "foo", null, [
 			NodeContent.text("(BAR)", ln(1)),
 			NodeContent.text("\n(BAZ)", ln(2))
 		], NodeAttribs.translated|NodeAttribs.textNode)
-	], to!string(parseDiet!tr("foo&.\n\tbar\n\tbaz")	));
+	]);
 }
 
 unittest { // test expected errors
@@ -446,7 +446,7 @@ unittest { // includes
 			InputFile("main.dt", diet),
 			InputFile("inc.dt", "p")
 		];
-		return parseDiet(files);
+		return parseDiet(files).nodes;
 	}
 
 	void testFail(string diet, string msg)
@@ -477,7 +477,7 @@ unittest { // extensions
 			InputFile("intermediate.dt", "extends root\nblock a\n\tp"),
 			InputFile("direct.dt", "block a")
 		];
-		return parseDiet(files);
+		return parseDiet(files).nodes;
 	}
 
 	void testFail(string diet, string msg)
@@ -530,7 +530,7 @@ unittest { // extensions
 
 unittest { // test CTFE-ability
 	static const result = parseDiet("foo#id.cls(att=\"val\", att2=1+3, att3='test#{4}it')\n\tbar");
-	static assert(result.length == 1);
+	static assert(result.nodes.length == 1);
 }
 
 
