@@ -5,7 +5,7 @@ Diet is a generic compile-time template system based on an XML-like structure. T
 
 See the preliminary [Specification](SPEC.md) for a syntax overview.
 
-This repository contians the designated successor implementation of the [`vibe.templ.diet` module](https://vibed.org/api/vibe.templ.diet/) of [vibe.d](https://vibed.org/). It's currently still in development and shouldn't be used for production yet.
+This repository contians the designated successor implementation of the [`vibe.templ.diet` module](https://vibed.org/api/vibe.templ.diet/) of [vibe.d](https://vibed.org/). The current state is almost stable and feature complete and ready for pre-production testing.
 
 [![Build Status](https://travis-ci.org/rejectedsoftware/diet-ng.svg?branch=master)](https://travis-ci.org/rejectedsoftware/diet-ng)
 
