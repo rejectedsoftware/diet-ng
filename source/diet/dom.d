@@ -14,7 +14,7 @@ string expectText(const(Attribute) att)
 {
 	import diet.defs : enforcep;
 	if (att.contents.length == 0) return null;
-	enforcep(att.isText, "Expected pure text attribute.", att.loc);
+	enforcep(att.isText, "'"~att.name~"' expected to be a pure text attribute.", att.loc);
 	return att.contents[0].value;
 }
 
@@ -28,7 +28,16 @@ string expectText(const(Node) n)
 	return n.contents[0].value;
 }
 
+string expectExpression(const(Attribute) att)
+{
+	import diet.defs : enforcep;
+	enforcep(att.isExpression, "'"~att.name~"' expected to be an expression attribute.", att.loc);
+	return att.contents[0].value;
+}
+
+bool isExpression(const(Attribute) att) { return att.contents.length == 1 && att.contents[0].kind == AttributeContent.Kind.interpolation; }
 bool isText(const(Attribute) att) { return att.contents.length == 0 || att.contents.length == 1 && att.contents[0].kind == AttributeContent.Kind.text; }
+
 
 /** Encapsulates a full Diet template document.
 */
@@ -167,7 +176,7 @@ class Node {
 		foreach (ref a; this.attributes)
 			if (a.name == name)
 				return a;
-		return Attribute(Location.init, name, null);
+		return Attribute(this.loc, name, null);
 	}
 
 	void setAttribute(Attribute att)
