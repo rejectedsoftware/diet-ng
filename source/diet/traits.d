@@ -63,17 +63,16 @@ string translate(ALIASES...)(string text)
 {
 	import std.traits : hasUDA;
 
-	foreach (A; ALIASES)
-		static if (hasUDA!(A, DietTraitsAttribute))
-			static if (is(typeof(A.translate)))
-				text = A.translate(text);
+	foreach (T; DietTraits!ALIASES)
+		static if (is(typeof(T.translate)))
+			text = T.translate(text);
 	return text;
 }
 
 
 /** Applies any transformations that are defined in the 
 */
-Node[] applyTraits(ALIASES...)(Node[] nodes)
+Document applyTraits(ALIASES...)(Document doc)
 {
 	import diet.defs : enforcep;
 	import std.algorithm.searching : startsWith;
@@ -125,9 +124,9 @@ Node[] applyTraits(ALIASES...)(Node[] nodes)
 		}
 	}
 
-	foreach (ref n; nodes) processNode(n);
+	foreach (ref n; doc.nodes) processNode(n);
 
-	return nodes;
+	return doc;
 }
 
 alias FilterCallback = void delegate(in char[] input, scope CharacterSink output);
@@ -264,17 +263,29 @@ private string runFilterCT(ALIASES...)(string text, string filter)
 private template FiltersFromAliases(ALIASES...)
 {
 	import std.meta : AliasSeq;
+	alias Traits = DietTraits!ALIASES;
+	template impl(size_t i) {
+		static if (i < Traits.length) {
+			// FIXME: merge lists avoiding duplicates
+			alias impl = AliasSeq!(FiltersFromContext!(Traits[i]), impl!(i+1));
+		} else alias impl = AliasSeq!();
+	}
+	alias FiltersFromAliases = impl!0;
+}
+
+private template DietTraits(ALIASES...)
+{
+	import std.meta : AliasSeq;
 	import std.traits : hasUDA;
 
 	template impl(size_t i) {
 		static if (i < ALIASES.length) {
 			static if (hasUDA!(ALIASES[i], DietTraitsAttribute)) {
-				// FIXME: merge lists avoiding duplicates
-				alias impl = AliasSeq!(FiltersFromContext!(ALIASES[i]), impl!(i+1));
+				alias impl = AliasSeq!(ALIASES[i], impl!(i+1));
 			} else alias impl = impl!(i+1);
 		} else alias impl = AliasSeq!();
 	}
-	alias FiltersFromAliases = impl!0;
+	alias DietTraits = impl!0;
 }
 
 private template FiltersFromContext(Context)
