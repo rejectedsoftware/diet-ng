@@ -126,6 +126,28 @@ string htmlEscapeMin(R)(R str)
 }
 
 
+void htmlEscape(R, T)(ref R dst, T val)
+{
+	import std.format : formattedWrite;
+	auto r = HTMLEscapeOutputRange!R(dst, HTMLEscapeFlags.defaults);
+	() @trusted { return &r; } ().formattedWrite("%s", val);
+}
+
+@safe unittest {
+	static struct R { @safe @nogc nothrow: void put(char) {} void put(dchar) {} void put(in char[]) {}}
+	R r;
+	r.htmlEscape("foo");
+	r.htmlEscape(12);
+	r.htmlEscape(12.4);
+}
+
+void htmlAttribEscape(R, T)(ref R dst, T val)
+{
+	import std.format : formattedWrite;
+	auto r = HTMLEscapeOutputRange!R(dst, HTMLEscapeFlags.attribute);
+	() @trusted { return &r; } ().formattedWrite("%s", val);
+}
+
 /**
 	Writes the HTML escaped version of a character to an output range.
 */
@@ -173,7 +195,41 @@ enum HTMLEscapeFlags {
 	escapeMinimal = 0,
 	escapeQuotes = 1<<0,
 	escapeNewline = 1<<1,
-	escapeUnknown = 1<<2
+	escapeUnknown = 1<<2,	
+	defaults = escapeNewline,
+	attribute = escapeNewline|escapeQuotes
+}
+
+private struct HTMLEscapeOutputRange(R)
+{
+	R* dst;
+	HTMLEscapeFlags flags;
+	char[4] u8seq;
+	uint u8seqfill;
+
+	this(ref R dst, HTMLEscapeFlags flags)
+	@safe nothrow @nogc {
+		() @trusted { this.dst = &dst; } ();
+		this.flags = flags;
+	}
+
+	@disable this(this);
+
+	void put(char ch)
+	{
+		import std.utf : stride;
+		assert(u8seqfill < u8seq.length);
+		u8seq[u8seqfill++] = ch;
+		if (u8seqfill >= 4 || stride(u8seq) <= u8seqfill) {
+			char[] str = u8seq[0 .. u8seqfill];
+			put(u8seq[0 .. u8seqfill]);
+			u8seqfill = 0;
+		}
+	}
+	void put(dchar ch) { filterHTMLEscape(*dst, ch); }
+	void put(in char[] str) { foreach (dchar ch;  str) put(ch); }
+
+	static assert(isOutputRange!(HTMLEscapeOutputRange, char));
 }
 
 private struct StringAppender {

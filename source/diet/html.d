@@ -152,7 +152,8 @@ string getHTMLMixin(in Document doc, string range_name = dietOutputRangeName)
 {
 	CTX ctx;
 	ctx.rangeName = range_name;
-	string ret = "import std.conv : to;\n";
+	string ret = "import diet.internal.html : htmlEscape, htmlAttribEscape;\n";
+	ret ~= "import std.format : formattedWrite;\n";
 	foreach (i, n; doc.nodes)
 		ret ~= ctx.getHTMLMixin(n, i == 0);
 	ret ~= ctx.flushRawText();
@@ -260,7 +261,7 @@ private string getElementMixin(ref CTX ctx, in Node node)
 					ret ~= ctx.rawText(node.loc, htmlAttribEscape(v.value));
 					break;
 				case interpolation, rawInterpolation:
-					ret ~= ctx.statement(node.loc, q{%s.filterHTMLAttribEscape((%s).to!string);}, ctx.rangeName, v.value);
+					ret ~= ctx.statement(node.loc, q{%s.htmlAttribEscape(%s);}, ctx.rangeName, v.value);
 					break;
 			}
 		}
@@ -307,9 +308,9 @@ private string getNodeContentsMixin(ref CTX ctx, in NodeContent c, bool first)
 		case text:
 			return ctx.rawText(c.loc, c.value);
 		case interpolation:
-			return ctx.statement(c.loc, q{%s.filterHTMLEscape((%s).to!string);}, ctx.rangeName, c.value);
+			return ctx.statement(c.loc, q{%s.htmlEscape(%s);}, ctx.rangeName, c.value);
 		case rawInterpolation:
-			return ctx.statement(c.loc, q{%s.put((%s).to!string);}, ctx.rangeName, c.value);
+			return ctx.statement(c.loc, q{%s.formattedWrite("%%s", %s);}, ctx.rangeName, c.value);
 	}
 }
 
@@ -521,4 +522,22 @@ unittest { // blocks and extensions
 		 == "<body><p>Default</p></body>");
 	assert(compilePair!("extends base\nprepend test\n\tp Hello", "body\n\tblock test\n\t\tp Default")
 		 == "<body><p>Hello</p><p>Default</p></body>");
+}
+
+/*@nogc*/ @safe unittest { // NOTE: formattedWrite is not @nogc
+	static struct R {
+		@nogc @safe nothrow:
+		void put(in char[]) {}
+		void put(char) {}
+		void put(dchar) {}
+	}
+
+	R r;
+	r.compileHTMLDietString!(
+`doctype html
+html
+	- foreach (i; 0 .. 10)
+		title= i
+	title t #{12} !{13}
+`);
 }
