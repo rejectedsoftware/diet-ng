@@ -56,3 +56,27 @@ Generated HTML output:
 			lines of text are contained in this paragraph.</p>
 		</body>
 	</html>
+
+
+Experimental HTML template caching
+----------------------------------
+
+Since compiling complex Diet templates can slow down the overall compilation
+process, the library provides an option to cache and re-use results. It is
+enabled by defining the version constant `DietUseCache` (
+`"versions": ["DietUseCache"]` in dub.json or `versions "DietUseCache"` in
+dub.sdl). It is not recommended to use this feature outside of the usual
+edit-compile-run development cycle, especially not for release builds.
+
+Once enabled, the template compiler will look for `_cached_*.d` files in the
+"views/" folder, where the `*` consists of the file name of the Diet template
+and a unique hash value that identifies the contents of the template, as well
+as included/extended ones. If found, it will simply use the contents of that
+file instead of going through the whole compilation process.
+
+At runtime, during initialization, the program will then output the contents of
+all newly compiled templates to the "views/" folder. For that reason it is
+currently **important that the program is run with the current working directory
+set to the package directory!** A drawback of this method is that outdated
+cached templates will not be deleted automatically. It is necessary to clear all
+`_cached_*` files by hand from time to time.
