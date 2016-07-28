@@ -8,9 +8,9 @@ html
 		p Showing #{iterations} iterations:
 
 		h2 Contents
-			ul
-				- foreach (i; 0 .. iterations)
-					li: a(href="\#iteration-#{i+1}") Iteration #{i+1}
+		ul
+			- foreach (i; 0 .. iterations)
+				li: a(href="\#iteration-#{i+1}") Iteration #{i+1}
 
 		- foreach (i; 0 .. iterations)
 			h2(id="iteration-#{i+1}") Iteration #{i+1}
