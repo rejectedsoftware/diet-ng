@@ -63,14 +63,10 @@ Implementation goals
 
 - Be as fast as possible. This means moving as many operations from run time to
   compile time as possible.
-
 - Avoid any dynamic memory allocations (unless it happens in user code)
-
 - Let the generated code be fully `@safe` (unless embedded user code isn't)
-
 - Be customizable (filters, translation, DOM transformations, output
   generators), without resorting to global library state
-
 - Operate on ranges. HTML output is written to an output range, input ranges
   are supproted within string interpolations and filters/translation support
   is supposed to be implementable using ranges (the latter part is not yet
