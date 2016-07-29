@@ -27,7 +27,7 @@ Example
 			- foreach (i; 0 .. 3)
 				h2(id=i) Point #{i}
 				p.
-					These are the #[i contents] of point #{i}. Multiple
+					These are the #[em contents] of point #{i}. Multiple
 					lines of text are contained in this paragraph.
 
 Generated HTML output:
@@ -46,13 +46,13 @@ Generated HTML output:
 				<li><a href="#2">Point 2</a></li>
 			</ol>
 			<h2 id="0">Point 0</h2>
-			<p>These are the <i>contents</i> of point 0. Multiple
+			<p>These are the <em>contents</em> of point 0. Multiple
 			lines of text are contained in this paragraph.</p>
 			<h2 id="1">Point 1</h2>
-			<p>These are the <i>contents</i> of point 1. Multiple
+			<p>These are the <em>contents</em> of point 1. Multiple
 			lines of text are contained in this paragraph.</p>
 			<h2 id="2">Point 2</h2>
-			<p>These are the <i>contents</i> of point 2. Multiple
+			<p>These are the <em>contents</em> of point 2. Multiple
 			lines of text are contained in this paragraph.</p>
 		</body>
 	</html>
@@ -95,3 +95,6 @@ currently **important that the program is run with the current working directory
 set to the package directory!** A drawback of this method is that outdated
 cached templates will not be deleted automatically. It is necessary to clear all
 `_cached_*` files by hand from time to time.
+
+*Note that hopefully this feature will be obsoleted soon by the [work of Stefan
+Koch on DMD's CTFE engine](https://github.com/UplinkCoder/dmd/commits/newCTFE).*
