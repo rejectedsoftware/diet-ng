@@ -10,6 +10,8 @@ import diet.input;
 import diet.parser;
 import diet.traits;
 
+import std.path : dirName, baseName, buildPath;
+
 
 /** Compiles a Diet template file that is available as a string import.
 
@@ -51,7 +53,7 @@ template compileHTMLDietFile(string filename, ALIASES...)
 	}
 
 	enum _diet_hash = computeTemplateHash();
-	enum _diet_cache_file_name = "_cached_"~filename~"_"~_diet_hash.to!string~".d";
+	enum _diet_cache_file_name = buildPath(dirName(filename), "_cached_"~baseName(filename)~"_"~_diet_hash.to!string~".d");
 
 	static if (_diet_use_cache && is(typeof(import(_diet_cache_file_name)))) {
 		pragma(msg, "Using cached Diet HTML template "~filename~"...");
