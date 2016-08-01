@@ -78,14 +78,16 @@ Document applyTraits(ALIASES...)(Document doc)
 	import std.algorithm.searching : startsWith;
 	import std.array : split;
 
-	void processNode(ref Node n)
+	void processNode(ref Node n, bool in_filter)
 	{
+		bool is_filter = n.name == Node.SpecialName.filter;
+
 		// process children first
 		for (size_t i = 0; i < n.contents.length;) {
 			auto nc = n.contents[i];
 			if (nc.kind == NodeContent.Kind.node) {
-				processNode(nc.node);
-				if (nc.node.name == Node.SpecialName.text) {
+				processNode(nc.node, is_filter || in_filter);
+				if ((is_filter || in_filter) && nc.node.name == Node.SpecialName.text) {
 					n.contents = n.contents[0 .. i] ~ nc.node.contents ~ n.contents[i+1 .. $];
 					i += nc.node.contents.length;
 				} else i++;
@@ -101,7 +103,7 @@ Document applyTraits(ALIASES...)(Document doc)
 		}
 
 		// finally process filters
-		if (n.name == Node.SpecialName.filter) {
+		if (is_filter) {
 			enforcep(n.isProceduralTextNode, "Only text is supported as filter contents.", n.loc);
 			auto chain = n.getAttribute("filterChain").expectText().split(' ');
 			n.attributes = null;
@@ -124,7 +126,7 @@ Document applyTraits(ALIASES...)(Document doc)
 		}
 	}
 
-	foreach (ref n; doc.nodes) processNode(n);
+	foreach (ref n; doc.nodes) processNode(n, false);
 
 	return doc;
 }

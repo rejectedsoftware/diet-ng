@@ -224,6 +224,14 @@ unittest { // test basic functionality
 	assert(parseDiet("-if(x)").nodes == [
 		new Node(ln(0), Node.SpecialName.code, null, [NodeContent.text("if(x)", ln(0))])
 	]);
+	assert(parseDiet("-if(x)\n\t|bar").nodes == [
+		new Node(ln(0), Node.SpecialName.code, null, [
+			NodeContent.text("if(x)", ln(0)),
+			NodeContent.tag(new Node(ln(1), Node.SpecialName.text, null, [
+				NodeContent.text("bar", ln(1))
+			]))
+		])
+	]);
 	assert(parseDiet(":foo\n\tbar").nodes == [
 		new Node(ln(0), ":", [Attribute(ln(0), "filterChain", [AttributeContent.text("foo")])], [
 			NodeContent.text("bar", ln(1))

@@ -128,7 +128,7 @@ template compileHTMLDietStrings(alias FILES_GROUP, ALIASES...)
 	static void exec(R)(ref R _diet_output)
 	{
 		mixin(localAliasesMixin!(0, ALIASES));
-		//pragma(msg, getHTMLMixin(nodes));
+		//pragma(msg, getHTMLMixin(_diet_nodes()));
 		mixin(getHTMLMixin(_diet_nodes()));
 	}
 
@@ -383,7 +383,8 @@ private string getCodeMixin(ref CTX ctx, in ref Node node)
 			ret ~= ctx.statement(node.loc, "%s {", c.value);
 			got_code = true;
 		} else {
-			ret ~= ctx.getNodeContentsMixin(c, i == 0);
+			assert(c.kind == NodeContent.Kind.node);
+			ret ~= ctx.getHTMLMixin(c.node, i == 0 || (got_code && i == 1));
 		}
 	}
 	ret ~= ctx.statement(node.loc, "}");
@@ -540,4 +541,15 @@ html
 		title= i
 	title t #{12} !{13}
 `);
+}
+
+unittest { // issue 4 - nested text in code
+	static string compile(string diet, ALIASES...)() {
+		import std.array : appender;
+		import std.string : strip;
+		auto dst = appender!string;
+		compileHTMLDietString!(diet, ALIASES)(dst);
+		return strip(cast(string)(dst.data));
+	}
+	assert(compile!"- if (true)\n\t| int bar;" == "int bar;", compile!"- if (true)\n\t| int bar;");
 }
