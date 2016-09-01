@@ -241,7 +241,18 @@ unittest { // test basic functionality
 		new Node(ln(0), ":", [Attribute(ln(0), "filterChain", [AttributeContent.text("foo bar")])], [
 			NodeContent.text("baz", ln(0))
 		], NodeAttribs.textNode)
-	], parseDiet(":foo :bar baz").text);
+	]);
+	assert(parseDiet(":foo\n\t:bar baz").nodes == [
+		new Node(ln(0), ":", [Attribute(ln(0), "filterChain", [AttributeContent.text("foo")])], [
+			NodeContent.text(":bar baz", ln(1))
+		], NodeAttribs.textNode)
+	]);
+	assert(parseDiet(":foo\n\tbar\n\t\t:baz").nodes == [
+		new Node(ln(0), ":", [Attribute(ln(0), "filterChain", [AttributeContent.text("foo")])], [
+			NodeContent.text("bar", ln(1)),
+			NodeContent.text("\n\t:baz", ln(2))
+		], NodeAttribs.textNode)
+	]);
 
 	// nested nodes
 	assert(parseDiet("a: b").nodes == [
