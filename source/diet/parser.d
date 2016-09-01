@@ -279,6 +279,9 @@ unittest { // test basic functionality
 	assert(parseDiet("a<>").nodes == [
 		new Node(ln(0), "a", null, [], NodeAttribs.fitInside|NodeAttribs.fitOutside)
 	]);
+	assert(parseDiet("a><").nodes == [
+		new Node(ln(0), "a", null, [], NodeAttribs.fitInside|NodeAttribs.fitOutside)
+	]);
 	assert(parseDiet("a<").nodes == [
 		new Node(ln(0), "a", null, [], NodeAttribs.fitInside)
 	]);
@@ -992,6 +995,12 @@ private bool parseTag(ref string input, ref size_t idx, ref Node dst, ref bool h
 	if (idx < input.length && input[idx] == '>') {
 		idx++;
 		dst.attribs |= NodeAttribs.fitOutside;
+	}
+
+	// avoid whitespace inside of tag (also allowed after >)
+	if (!(dst.attribs & NodeAttribs.fitInside) && idx < input.length && input[idx] == '<') {
+		idx++;
+		dst.attribs |= NodeAttribs.fitInside;
 	}
 
 	// translate text contents
