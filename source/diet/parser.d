@@ -946,11 +946,14 @@ private Node parseTagLine(alias TR)(ref string input, ref Location loc, out bool
 
 		if (remainder.length && remainder[0] == ' ') {
 			// parse the rest of the line as text contents (if any non-ws)
-			remainder = TR(remainder[1 .. $]);
+			remainder = remainder[1 .. $];
+			if (ret.attribs & NodeAttribs.translated)
+				remainder = TR(remainder);
 			parseTextLine(remainder, ret, tmploc);
 		} else if (ret.name == Node.SpecialName.text) {
 			// allow omitting the whitespace for "|" text nodes
-			remainder = TR(remainder);
+			if (ret.attribs & NodeAttribs.translated)
+				remainder = TR(remainder);
 			parseTextLine(remainder, ret, tmploc);
 		} else {
 			import std.string : strip;
