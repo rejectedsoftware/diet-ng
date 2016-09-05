@@ -57,8 +57,9 @@ template compileHTMLDietFile(string filename, ALIASES...)
 		pragma(msg, "Using cached Diet HTML template "~filename~"...");
 		enum _dietParser = import(_diet_cache_file_name);
 	} else {
+		alias TRAITS = DietTraits!ALIASES;
 		pragma(msg, "Compiling Diet HTML template "~filename~"...");
-		Document _diet_nodes() { return applyTraits!ALIASES(parseDiet!(translate!ALIASES)(_diet_files)); }
+		private Document _diet_nodes() { return applyTraits!TRAITS(parseDiet!(translate!TRAITS)(_diet_files)); }
 		enum _dietParser = getHTMLMixin(_diet_nodes());
 
 		static if (_diet_use_cache) {
@@ -72,7 +73,7 @@ template compileHTMLDietFile(string filename, ALIASES...)
 	}
 
 	// uses the correct range name and removes 'dst' from the scope
-	void exec(R)(ref R _diet_output)
+	private void exec(R)(ref R _diet_output)
 	{
 		mixin(localAliasesMixin!(0, ALIASES));
 		//pragma(msg, getHTMLMixin(nodes));
@@ -122,10 +123,11 @@ template compileHTMLDietString(string contents, ALIASES...)
 */
 template compileHTMLDietStrings(alias FILES_GROUP, ALIASES...)
 {
-	static Document _diet_nodes() { return applyTraits!ALIASES(parseDiet!(translate!ALIASES)(filesFromGroup!FILES_GROUP)); }
+	alias TRAITS = DietTraits!ALIASES;
+	private static Document _diet_nodes() { return applyTraits!TRAITS(parseDiet!(translate!TRAITS)(filesFromGroup!FILES_GROUP)); }
 
 	// uses the correct range name and removes 'dst' from the scope
-	static void exec(R)(ref R _diet_output)
+	private void exec(R)(ref R _diet_output)
 	{
 		mixin(localAliasesMixin!(0, ALIASES));
 		//pragma(msg, getHTMLMixin(_diet_nodes()));
@@ -552,4 +554,23 @@ unittest { // issue 4 - nested text in code
 		return strip(cast(string)(dst.data));
 	}
 	assert(compile!"- if (true)\n\t| int bar;" == "int bar;", compile!"- if (true)\n\t| int bar;");
+}
+
+unittest { // class instance variables
+	import std.array : appender;
+	import std.string : strip;
+
+	static class C {
+		int x = 42;
+
+		string test()
+		{
+			auto dst = appender!string;
+			dst.compileHTMLDietString!("| #{x}", x);
+			return dst.data;
+		}
+	}
+
+	auto c = new C;
+	assert(c.test().strip == "42");
 }
