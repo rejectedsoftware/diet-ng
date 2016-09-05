@@ -64,7 +64,7 @@ string translate(ALIASES...)(string text)
 	import std.traits : hasUDA;
 
 	foreach (T; DietTraits!ALIASES)
-		static if (is(typeof(T.translate)))
+		static if (is(typeof(&T.translate)))
 			text = T.translate(text);
 	return text;
 }
@@ -146,8 +146,9 @@ void filter(ALIASES...)(in char[] input, string filter, CharacterSink output)
 					return;
 				}
 		}
-	
-	output(input);
+
+	// FIXME: output location information
+	throw new Exception("Unknown filter: "~filter);
 }
 
 private string generateFilterChainMixin(string[] chain, NodeContent[] contents)
@@ -173,7 +174,7 @@ private string generateFilterChainMixin(string[] chain, NodeContent[] contents)
 					ret ~= q{%s_app.formattedWrite("%%s", %s);}.format(tloname, c.value);
 					break;
 				case NodeContent.Kind.interpolation:
-					enforcep(false, "Raw interpolations are not supported within filter contents.", c.loc);
+					enforcep(false, "Non-raw interpolations are not supported within filter contents.", c.loc);
 					break;
 			}
 			ret ~= "\n";
