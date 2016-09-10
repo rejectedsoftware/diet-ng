@@ -312,7 +312,7 @@ private string getNodeContentsMixin(ref CTX ctx, in NodeContent c, bool first)
 		case interpolation:
 			return ctx.statement(c.loc, q{%s.htmlEscape(%s);}, ctx.rangeName, c.value);
 		case rawInterpolation:
-			return ctx.statement(c.loc, q{%s.formattedWrite("%%s", %s);}, ctx.rangeName, c.value);
+			return ctx.statement(c.loc, q{() @trusted { return (&%s); } ().formattedWrite("%%s", %s);}, ctx.rangeName, c.value);
 	}
 }
 
@@ -573,4 +573,10 @@ unittest { // class instance variables
 
 	auto c = new C;
 	assert(c.test().strip == "42");
+}
+
+unittest { // raw interpolation for non-copyable range
+	struct R { @disable this(this); void put(dchar) {} void put(in char[]) {} }
+	R r;
+	r.compileHTMLDietString!("a !{2}");
 }
