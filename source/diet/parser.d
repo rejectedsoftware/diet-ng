@@ -555,6 +555,16 @@ unittest { // test CTFE-ability
 	static assert(result.nodes.length == 1);
 }
 
+unittest { // regression tests
+	import std.conv : to;
+	Location ln(int l) { return Location("string", l); }
+
+	// last line contains only whitespace
+	assert(parseDiet("test\n\t").nodes == [
+		new Node(ln(0), "test")
+	]);
+}
+
 
 /** Dummy translation function that returns the input unmodified.
 */
@@ -777,7 +787,7 @@ Node[] parseDietRaw(alias TR)(InputFile file)
 		string indent = input.skipIndent();
 
 		// skip empty lines and ignore whitespace on those
-		if (input.length == 0 || input[0] == '\n') { input.popFront(); loc.line++; continue; }
+		if (input.empty || input[0] == '\n') { if (!input.empty) input.popFront(); loc.line++; continue; }
 		if (input[0] == '\r') { input.popFrontN(input.length >= 2 && input[1] == '\n' ? 2 : 1); loc.line++; continue; }
 
 		enforcep(prevlevel >= 0 || indent.length == 0, "First node must not be indented.", loc);
