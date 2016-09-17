@@ -68,7 +68,7 @@ Implementation goals
 - Be customizable (filters, translation, DOM transformations, output
   generators), without resorting to global library state
 - Operate on ranges. HTML output is written to an output range, input ranges
-  are supproted within string interpolations and filters/translation support
+  are supported within string interpolations and filters/translation support
   is supposed to be implementable using ranges (the latter part is not yet
   implemented).
 
