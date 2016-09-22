@@ -266,7 +266,7 @@ struct Attribute {
 			addText(contents[0].value);
 			contents = contents[1 .. $];
 		}
-		contents ~= contents;
+		this.contents ~= contents;
 	}
 }
 

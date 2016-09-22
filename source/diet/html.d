@@ -226,6 +226,7 @@ private string getElementMixin(ref CTX ctx, in Node node)
 			had_class = true;
 			foreach (ca; node.attributes[ai+1 .. $]) {
 				if (ca.name != "class") continue;
+				if (!ca.contents.length || (ca.isText && !ca.expectText.length)) continue;
 				att.addText(" ");
 				att.addContents(ca.contents);
 			}
@@ -579,4 +580,18 @@ unittest { // raw interpolation for non-copyable range
 	struct R { @disable this(this); void put(dchar) {} void put(in char[]) {} }
 	R r;
 	r.compileHTMLDietString!("a !{2}");
+}
+
+unittest {
+	assert(utCompile!(".foo(class=true?\"bar\":\"baz\")") == "<div class=\"foo bar\"></div>", utCompile!".foo(class=true?\"bar\":\"baz\")");
+}
+
+version (unittest) {
+	private string utCompile(string diet, ALIASES...)() {
+		import std.array : appender;
+		import std.string : strip;
+		auto dst = appender!string;
+		compileHTMLDietString!(diet, ALIASES)(dst);
+		return strip(cast(string)(dst.data));
+	}
 }
