@@ -1,6 +1,8 @@
 Diet Language Specification
 ===========================
 
+(NOTE: This specification is not yet complete. To fill the gaps, you can orient yourself using the [documentation on vibed.org](https://vibed.org/templates/diet) and the [pugjs reference](https://pugjs.org/api/reference.html)).
+
 Synopsis
 --------
 
