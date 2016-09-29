@@ -244,12 +244,13 @@ private bool hasFilterCT(TRAITS...)(string filter)
 	alias Filters = FiltersFromTraits!TRAITS;
 	static if (Filters.length) {
 		switch (filter) {
-			default: return false;
+			default: break;
 			foreach (i, F; Filters) {
 				case FilterName!(Filters[i]): return true;
 			}
 		}
-	} else return false;
+	}
+	return false;
 }
 
 private string runFilterCT(TRAITS...)(string text, string filter)
@@ -257,12 +258,13 @@ private string runFilterCT(TRAITS...)(string text, string filter)
 	alias Filters = FiltersFromTraits!TRAITS;
 	static if (Filters.length) {
 		switch (filter) {
-			default: return text; // FIXME: error out?
+			default: break;
 			foreach (i, F; Filters) {
 				case FilterName!(Filters[i]): return F(text);
 			}
 		}
-	} else return text; // FIXME: error out?
+	}
+	return text; // FIXME: error out?
 }
 
 private template FiltersFromTraits(TRAITS...)
