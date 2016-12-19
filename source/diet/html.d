@@ -672,3 +672,7 @@ version (unittest) {
 		return strip(cast(string)(dst.data));
 	}
 }
+
+unittest { // blank lines in text blocks
+	assert(utCompile!("pre.\n\tfoo\n\n\tbar") == "<pre>foo\n\nbar</pre>", utCompile!("pre.\n\tfoo\n\n\tbar"));
+}

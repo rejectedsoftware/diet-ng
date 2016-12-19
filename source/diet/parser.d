@@ -132,6 +132,13 @@ unittest { // test basic functionality
 			NodeContent.text("\n   world", ln(2))
 		], NodeAttribs.textNode)
 	]);
+	assert(parseDiet("foo.\n\thello\n\n\t   world").nodes == [
+		new Node(ln(0), "foo", null, [
+			NodeContent.text("hello", ln(1)),
+			NodeContent.text("\n", ln(2)),
+			NodeContent.text("\n   world", ln(3))
+		], NodeAttribs.textNode)
+	]);
 
 	// translated text
 	assert(parseDiet("foo& test").nodes == [
@@ -765,6 +772,7 @@ private struct FileInfo {
 Node[] parseDietRaw(alias TR)(InputFile file)
 {
 	import std.algorithm.iteration : map;
+	import std.algorithm.comparison : among;
 	import std.array : array;
 
 	string indent_style;
@@ -777,6 +785,7 @@ Node[] parseDietRaw(alias TR)(InputFile file)
 	// the second dimension is for in-line nested nodes
 	Node[][] stack;
 	stack.length = 8;
+	string previndent; // inherited by blank lines
 
 	next_line:
 	while (input.length) {
@@ -786,9 +795,10 @@ Node[] parseDietRaw(alias TR)(InputFile file)
 		// skip whitespace at the beginning of the line
 		string indent = input.skipIndent();
 
-		// skip empty lines and ignore whitespace on those
-		if (input.empty || input[0] == '\n') { if (!input.empty) input.popFront(); loc.line++; continue; }
-		if (input[0] == '\r') { input.popFrontN(input.length >= 2 && input[1] == '\n' ? 2 : 1); loc.line++; continue; }
+		// treat empty lines as if they had the indendation level of the last non-empty line
+		if (input.empty || input[0].among('\n', '\r'))
+			indent = previndent;
+		else previndent = indent;
 
 		enforcep(prevlevel >= 0 || indent.length == 0, "First node must not be indented.", loc);
 
@@ -835,6 +845,17 @@ Node[] parseDietRaw(alias TR)(InputFile file)
 				pnode.addText(skipLine(input, loc), tmploc);
 				continue;
 			}
+		}
+
+		// skip empty lines
+		if (input.empty) break;
+		else if (input[0] == '\n') { loc.line++; input.popFront(); continue; }
+		else if (input[0] == '\r') {
+			loc.line++;
+			input.popFront();
+			if (!input.empty && input[0] == '\n')
+				input.popFront();
+			continue;
 		}
 
 		// parse the line and write it to the stack:
