@@ -16,3 +16,7 @@ d:
   - dmd-2.071.2
   - dmd-2.070.0
   - dmd-2.069.2
+
+script:
+  - dub build -b release
+  - dub test
