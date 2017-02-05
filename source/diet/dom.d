@@ -41,7 +41,7 @@ bool isText(const(Attribute) att) { return att.contents.length == 0 || att.conte
 
 /** Encapsulates a full Diet template document.
 */
-final class Document {
+/*final*/ class Document { // non-final because of https://issues.dlang.org/show_bug.cgi?id=17146
 	Node[] nodes;
 
 	this(Node[] nodes) { this.nodes = nodes; }
@@ -50,7 +50,7 @@ final class Document {
 
 /** Represents a single node in the DOM tree.
 */
-final class Node {
+/*final*/ class Node { // non-final because of https://issues.dlang.org/show_bug.cgi?id=17146
 	@safe nothrow:
 
 	/// A set of names that identify special-purpose nodes
