@@ -572,6 +572,20 @@ unittest { // regression tests
 	]);
 }
 
+unittest { // issue #14 - blocks in includes
+	auto files = [
+		InputFile("main.dt", "extends layout\nblock nav\n\tbaz"),
+		InputFile("layout.dt", "foo\ninclude inc"),
+		InputFile("inc.dt", "bar\nblock nav"),
+	];
+	import std.conv : text;
+	assert(parseDiet(files).nodes == [
+		new Node(Location("layout.dt", 0), "foo", null, null),
+		new Node(Location("inc.dt", 0), "bar", null, null),
+		new Node(Location("main.dt", 2), "baz", null, null)
+	], parseDiet(files).nodes.text);
+}
+
 
 /** Dummy translation function that returns the input unmodified.
 */
@@ -724,7 +738,7 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, Bloc
 			enforcep(n.contents.length == 1, "Includes cannot have children.", n.loc);
 			auto fidx = files.countUntil!(f => matchesName(f.name, name, files[file_index].name));
 			enforcep(fidx >= 0, "Missing include input file: "~name, n.loc);
-			insert(parseDietWithExtensions(files, fidx, null, import_stack ~ file_index));
+			insert(parseDietWithExtensions(files, fidx, blocks, import_stack ~ file_index));
 		} else {
 			n.contents.modifyArray!((nc) {
 				Nullable!(NodeContent[]) rn;
