@@ -63,12 +63,11 @@ Document parseDiet(alias TR = identity)(InputFile[] files)
 	import std.algorithm.iteration : map;
 	import std.array : array;
 	FileInfo[] parsed_files = files.map!(f => FileInfo(f.name, parseDietRaw!TR(f))).array;
-	return new Document(parseDietWithExtensions(parsed_files, 0, null, null));
+	BlockInfo[][string] blocks;
+	return new Document(parseDietWithExtensions(parsed_files, 0, blocks, null));
 }
 
 unittest { // test basic functionality
-	import std.conv : text;
-
 	Location ln(int l) { return Location("string", l); }
 
 	// simple node
@@ -316,7 +315,6 @@ unittest { // test basic functionality
 }
 
 unittest {
-	import std.conv : to;
 	Location ln(int l) { return Location("string", l); }
 
 	// angular2 html attributes tests
@@ -425,7 +423,6 @@ unittest {
 
 unittest { // translation
 	import std.string : toUpper;
-	import std.conv : to;
 
 	static Location ln(int l) { return Location("string", l); }
 
@@ -435,7 +432,7 @@ unittest { // translation
 		new Node(ln(0), "foo", null, [
 			NodeContent.text("(TEST)", ln(0))
 		], NodeAttribs.translated)
-	], to!string(parseDiet!tr("foo& test")));
+	]);
 
 	assert(parseDiet!tr("foo& test #{x} it").nodes == [
 		new Node(ln(0), "foo", null, [
@@ -559,6 +556,22 @@ unittest { // extensions
 			NodeContent.tag(new Node(Location("intermediate.dt", 2), "p", null, null))
 		])
 	]);
+	assert(parse("extends intermediate\nprepend a\n\tfoo\nappend a\n\tbar") == [ // issue #13
+		new Node(Location("root.dt", 0), "html", null, [
+			NodeContent.tag(new Node(Location("main.dt", 2), "foo", null, null)),
+			NodeContent.tag(new Node(Location("intermediate.dt", 2), "p", null, null)),
+			NodeContent.tag(new Node(Location("main.dt", 4), "bar", null, null))
+		])
+	]);
+	assert(parse("extends intermediate\nprepend a\n\tfoo\nprepend a\n\tbar\nappend a\n\tbaz\nappend a\n\tbam") == [
+		new Node(Location("root.dt", 0), "html", null, [
+			NodeContent.tag(new Node(Location("main.dt", 2), "foo", null, null)),
+			NodeContent.tag(new Node(Location("main.dt", 4), "bar", null, null)),
+			NodeContent.tag(new Node(Location("intermediate.dt", 2), "p", null, null)),
+			NodeContent.tag(new Node(Location("main.dt", 6), "baz", null, null)),
+			NodeContent.tag(new Node(Location("main.dt", 8), "bam", null, null))
+		])
+	]);
 	assert(parse("extends direct") == []);
 	assert(parse("extends direct\nblock a\n\tp") == [
 		new Node(Location("main.dt", 2), "p", null, null)
@@ -571,7 +584,6 @@ unittest { // test CTFE-ability
 }
 
 unittest { // regression tests
-	import std.conv : to;
 	Location ln(int l) { return Location("string", l); }
 
 	// last line contains only whitespace
@@ -586,12 +598,11 @@ unittest { // issue #14 - blocks in includes
 		InputFile("layout.dt", "foo\ninclude inc"),
 		InputFile("inc.dt", "bar\nblock nav"),
 	];
-	import std.conv : text;
 	assert(parseDiet(files).nodes == [
 		new Node(Location("layout.dt", 0), "foo", null, null),
 		new Node(Location("inc.dt", 0), "bar", null, null),
 		new Node(Location("main.dt", 2), "baz", null, null)
-	], parseDiet(files).nodes.text);
+	]);
 }
 
 
@@ -650,9 +661,9 @@ private string parseIdent(in ref string str, ref size_t start,
 	assert(false);
 }
 
-private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, BlockInfo[string] blocks, size_t[] import_stack)
+private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref BlockInfo[][string] blocks, size_t[] import_stack)
 {
-	import std.algorithm : all, canFind, countUntil, filter, map;
+	import std.algorithm : all, any, canFind, countUntil, filter, find, map;
 	import std.array : array;
 	import std.path : stripExtension;
 	import std.typecons : Nullable;
@@ -688,12 +699,7 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, Bloc
 				"'block' must have a name.", n.loc);
 			auto name = n.contents[0].value.ctstrip;
 			auto contents = n.contents[1 .. $].filter!(n => n.kind == NodeContent.Kind.node).map!(n => n.node).array;
-			if (auto pb = name in blocks) {
-				if (pb.mode == BlockInfo.Mode.prepend) pb.contents = pb.contents ~ contents;
-				else if (pb.mode == BlockInfo.Mode.append) pb.contents = contents ~ pb.contents;
-				else continue;
-				pb.mode = mode;
-			} else blocks[name] = BlockInfo(mode, contents);
+			blocks[name] ~= BlockInfo(mode, contents);
 		}
 
 		// parse base template
@@ -728,17 +734,23 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, Bloc
 
 		if (n.name == "block") {
 			auto name = extractFilename(n);
-			auto pb = name in blocks;
+			auto blockdefs = blocks.get(name, null);
 
-			if (pb && pb.mode == BlockInfo.Mode.prepend)
-				insert(pb.contents);
-			if (!pb || pb.mode != BlockInfo.Mode.replace)
+			foreach (b; blockdefs.filter!(b => b.mode == BlockInfo.Mode.prepend))
+				insert(b.contents);
+
+			auto replblocks = blockdefs.find!(b => b.mode == BlockInfo.Mode.replace);
+			if (!replblocks.empty) {
+				insert(replblocks.front.contents);
+			} else {
 				insert(n.contents[1 .. $].map!((nc) {
 					assert(nc.kind == NodeContent.Kind.node, "Block contains non-node child!?");
 					return nc.node;
 				}).array);
-			if (pb && pb.mode != BlockInfo.Mode.prepend)
-				insert(pb.contents);
+			}
+
+			foreach (b; blockdefs.filter!(b => b.mode == BlockInfo.Mode.append))
+				insert(b.contents);
 
 			if (ret.isNull) ret = [];
 		} else if (n.name == "include") {
