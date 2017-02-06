@@ -91,6 +91,13 @@ unittest { // test basic functionality
 			Attribute(ln(0), "class", [AttributeContent.text("cls2")])
 		])
 	]);
+	assert(parseDiet("test.cls1#id.cls2").nodes == [ // issue #9
+		new Node(ln(0), "test", [
+			Attribute(ln(0), "class", [AttributeContent.text("cls1")]),
+			Attribute(ln(0), "id", [AttributeContent.text("id")]),
+			Attribute(ln(0), "class", [AttributeContent.text("cls2")])
+		])
+	]);
 
 	// empty tag name (only class)
 	assert(parseDiet(".foo").nodes == [
@@ -467,6 +474,7 @@ unittest { // test expected errors
 	testFail("test.()", "Expected identifier but got '('.");
 	testFail("a #[b.]", "Multi-line text nodes are not permitted for inline-tags.");
 	testFail("a #[b: c]", "Nested inline-tags not allowed.");
+	testFail("a#foo#bar", "Only one \"id\" definition using '#' is allowed.");
 }
 
 unittest { // includes
@@ -1022,22 +1030,25 @@ private bool parseTag(ref string input, ref size_t idx, ref Node dst, ref bool h
 		idx--;
 	}
 
- 	// node ID
-	if (idx < input.length && input[idx] == '#') {
-		idx++;
-		auto value = skipIdent(input, idx, "-_", loc);
-		enforcep(value.length > 0, "Expected id.", loc);
-		dst.attributes ~= Attribute(loc, "id", [AttributeContent(AttributeContent.Kind.text, value)]);
-	}
-
-	// node classes
-	while (idx < input.length && input[idx] == '.') {
-		if (idx+1 >= input.length || input[idx+1].isWhite)
-			goto textBlock;
-		idx++;
-		auto value = skipIdent(input, idx, "-_", loc);
-		enforcep(value.length > 0, "Expected class name identifier.", loc);
-		dst.attributes ~= Attribute(loc, "class", [AttributeContent(AttributeContent.Kind.text, value)]);
+	bool have_id = false;
+	while (idx < input.length) {
+		if (input[idx] == '#') {
+		 	// node ID
+			idx++;
+			auto value = skipIdent(input, idx, "-_", loc);
+			enforcep(value.length > 0, "Expected id.", loc);
+			enforcep(!have_id, "Only one \"id\" definition using '#' is allowed.", loc);
+			have_id = true;
+			dst.attributes ~= Attribute(loc, "id", [AttributeContent(AttributeContent.Kind.text, value)]);
+		} else if (input[idx] == '.') {
+			// node classes
+			if (idx+1 >= input.length || input[idx+1].isWhite)
+				goto textBlock;
+			idx++;
+			auto value = skipIdent(input, idx, "-_", loc);
+			enforcep(value.length > 0, "Expected class name identifier.", loc);
+			dst.attributes ~= Attribute(loc, "class", [AttributeContent(AttributeContent.Kind.text, value)]);
+		} else break;
 	}
 
 	// generic attributes
