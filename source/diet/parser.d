@@ -63,7 +63,7 @@ Document parseDiet(alias TR = identity)(InputFile[] files)
 	import std.algorithm.iteration : map;
 	import std.array : array;
 	FileInfo[] parsed_files = files.map!(f => FileInfo(f.name, parseDietRaw!TR(f))).array;
-	BlockInfo[][string] blocks;
+	BlockInfo[] blocks;
 	return new Document(parseDietWithExtensions(parsed_files, 0, blocks, null));
 }
 
@@ -661,7 +661,7 @@ private string parseIdent(in ref string str, ref size_t start,
 	assert(false);
 }
 
-private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref BlockInfo[][string] blocks, size_t[] import_stack)
+private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref BlockInfo[] blocks, size_t[] import_stack)
 {
 	import std.algorithm : all, any, canFind, countUntil, filter, find, map;
 	import std.array : array;
@@ -699,7 +699,7 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref 
 				"'block' must have a name.", n.loc);
 			auto name = n.contents[0].value.ctstrip;
 			auto contents = n.contents[1 .. $].filter!(n => n.kind == NodeContent.Kind.node).map!(n => n.node).array;
-			blocks[name] ~= BlockInfo(mode, contents);
+			blocks ~= BlockInfo(name, mode, contents);
 		}
 
 		// parse base template
@@ -734,12 +734,12 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref 
 
 		if (n.name == "block") {
 			auto name = extractFilename(n);
-			auto blockdefs = blocks.get(name, null);
+			auto blockdefs = blocks.filter!(b => b.name == name);
 
-			foreach (b; blockdefs.filter!(b => b.mode == BlockInfo.Mode.prepend))
+			foreach (b; blockdefs.save.filter!(b => b.mode == BlockInfo.Mode.prepend))
 				insert(b.contents);
 
-			auto replblocks = blockdefs.find!(b => b.mode == BlockInfo.Mode.replace);
+			auto replblocks = blockdefs.save.find!(b => b.mode == BlockInfo.Mode.replace);
 			if (!replblocks.empty) {
 				insert(replblocks.front.contents);
 			} else {
@@ -749,7 +749,7 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref 
 				}).array);
 			}
 
-			foreach (b; blockdefs.filter!(b => b.mode == BlockInfo.Mode.append))
+			foreach (b; blockdefs.save.filter!(b => b.mode == BlockInfo.Mode.append))
 				insert(b.contents);
 
 			if (ret.isNull) ret = [];
@@ -789,6 +789,7 @@ private struct BlockInfo {
 		replace,
 		append
 	}
+	string name;
 	Mode mode = Mode.replace;
 	Node[] contents;
 }
