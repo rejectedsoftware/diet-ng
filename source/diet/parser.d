@@ -1317,12 +1317,14 @@ private void parseAttributeText(string input, ref AttributeContent[] dst, in ref
 
 private string skipUntilClosingBrace(in ref string s, ref size_t idx, in ref Location loc)
 {
+	import std.algorithm.comparison : among;
+
 	int level = 0;
 	auto start = idx;
 	while( idx < s.length ){
 		if( s[idx] == '{' ) level++;
 		else if( s[idx] == '}' ) level--;
-		enforcep(s[idx] != '\n', "Missing '}' before end of line.", loc);
+		enforcep(!s[idx].among('\n', '\r'), "Missing '}' before end of line.", loc);
 		if( level < 0 ) return s[start .. idx];
 		idx++;
 	}
@@ -1332,16 +1334,18 @@ private string skipUntilClosingBrace(in ref string s, ref size_t idx, in ref Loc
 
 private string skipUntilClosingBracket(in ref string s, ref size_t idx, in ref Location loc)
 {
+	import std.algorithm.comparison : among;
+
 	int level = 0;
 	auto start = idx;
 	while( idx < s.length ){
 		if( s[idx] == '[' ) level++;
 		else if( s[idx] == ']' ) level--;
-		enforcep(s[idx] != '\n', "Missing ']' before end of line.", loc);
+		enforcep(!s[idx].among('\n', '\r'), "Missing ']' before end of line.", loc);
 		if( level < 0 ) return s[start .. idx];
 		idx++;
 	}
-	enforcep(false, "Missing closing brace", loc);
+	enforcep(false, "Missing closing bracket", loc);
 	assert(false);
 }
 
