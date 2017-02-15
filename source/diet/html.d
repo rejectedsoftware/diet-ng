@@ -328,6 +328,7 @@ private string getElementMixin(ref CTX ctx, in Node node)
 				"keygen", "link", "meta", "param", "source", "track", "wbr":
 			enforcep(!node.contents.length, "Singular HTML element '"~node.name~"' may not have contents.", node.loc);
 			ret ~= ctx.rawText(node.loc, "/>");
+			ctx.prettyNewLine();
 			enforcep(node.contents.length == 0, "Singular tag <"~node.name~"> may not have contents.", node.loc);
 			return ret;
 	}
@@ -350,8 +351,7 @@ private string getElementMixin(ref CTX ctx, in Node node)
 
 	// write end tag
 	ret ~= ctx.rawText(node.loc, "</"~tagname~">");
-
-	if (need_newline) ctx.prettyNewLine();
+	ctx.prettyNewLine();
 
 	return ret;
 }
@@ -675,4 +675,11 @@ version (unittest) {
 
 unittest { // blank lines in text blocks
 	assert(utCompile!("pre.\n\tfoo\n\n\tbar") == "<pre>foo\n\nbar</pre>", utCompile!("pre.\n\tfoo\n\n\tbar"));
+}
+
+unittest { // singular tags should be each on their own line
+	enum src = "p foo\nlink\nlink";
+	enum dst = "<p>foo</p>\n<link/>\n<link/>";
+	@dietTraits struct T { enum HTMLOutputStyle htmlOutputStyle = HTMLOutputStyle.pretty; }
+	assert(utCompile!(src, T) == dst);
 }
