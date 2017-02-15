@@ -1,6 +1,44 @@
 Changelog
 =========
 
+v1.1.4 - 2016-02-
+-------------------
+
+- Fixes formatting of singluar elements in pretty HTML output - [issue #18][issue18]
+
+[issue18]: https://github.com/rejectedsoftware/diet-ng/issues/18
+
+
+v1.1.3 - 2017-02-09
+-------------------
+
+### Bug fixes ###
+
+- Works around an internal compiler error on 2.072.2 that got triggered in 1.1.2
+
+
+v1.1.2 - 2017-02-06
+-------------------
+
+### Features and improvements ###
+
+- Class/ID definitions (`.cls#id`) can now be specified in any order - [issue #9][issue9]
+- Block definitions can now also be in included files - [issue #14][issue14]
+- Multiple contents definitions for the same block are now handled properly - [issue #13][issue13]
+
+[issue9]: https://github.com/rejectedsoftware/diet-ng/issues/9
+[issue13]: https://github.com/rejectedsoftware/diet-ng/issues/13
+[issue14]: https://github.com/rejectedsoftware/diet-ng/issues/14
+
+
+v1.1.1 - 2016-12-19
+-------------------
+
+### Bug fixes ###
+
+- Fixed parsing of empty lines in raw text blocks
+
+
 v1.1.0 - 2016-09-29
 -------------------
 
