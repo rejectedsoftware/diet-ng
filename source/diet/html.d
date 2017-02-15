@@ -32,7 +32,7 @@ import diet.traits;
 */
 template compileHTMLDietFile(string filename, ALIASES...)
 {
-	import std.conv : to;	
+	import std.conv : to;
 	enum _diet_files = collectFiles!filename;
 
 	version (DietUseCache) enum _diet_use_cache = true;
@@ -290,16 +290,21 @@ private string getElementMixin(ref CTX ctx, in Node node)
 				continue;
 			}
 
-			ret ~= ctx.statement(node.loc, q{static if (is(typeof(%s) == bool)) }~'{', expr);
-			if (ctx.isHTML5) ret ~= ctx.statement(node.loc, q{if (%s) %s.put(" %s");}, expr, ctx.rangeName, att.name);
-			else ret ~= ctx.statement(node.loc, q{if (%s) %s.put(" %s=\"%s\"");}, expr, ctx.rangeName, att.name, att.name);
-			ret ~= ctx.statement(node.loc, "} else "~q{static if (is(typeof(%s) : const(char)[])) }~"{{", expr);
-			ret ~= ctx.statement(node.loc, q{  auto val = %s;}, expr);
-			ret ~= ctx.statement(node.loc, q{  if (val !is null) }~'{');
-			ret ~= ctx.rawText(node.loc, " "~att.name~"=\"");
-			ret ~= ctx.statement(node.loc, q{    %s.filterHTMLAttribEscape(val);}, ctx.rangeName);
-			ret ~= ctx.rawText(node.loc, "\"");
-			ret ~= ctx.statement(node.loc, "  }");
+			ret ~= ctx.statement(node.loc, q{
+				static if (is(typeof(() { return %s; }()) == bool) )
+			}~'{', expr);
+				if (ctx.isHTML5)
+					ret ~= ctx.statement(node.loc, q{if (%s) %s.put(" %s");}, expr, ctx.rangeName, att.name);
+				else
+					ret ~= ctx.statement(node.loc, q{if (%s) %s.put(" %s=\"%s\"");}, expr, ctx.rangeName, att.name, att.name);
+
+				ret ~= ctx.statement(node.loc, "} else "~q{static if (is(typeof(%s) : const(char)[])) }~"{{", expr);
+				ret ~= ctx.statement(node.loc, q{  auto val = %s;}, expr);
+				ret ~= ctx.statement(node.loc, q{  if (val !is null) }~'{');
+					ret ~= ctx.rawText(node.loc, " "~att.name~"=\"");
+					ret ~= ctx.statement(node.loc, q{    %s.filterHTMLAttribEscape(val);}, ctx.rangeName);
+					ret ~= ctx.rawText(node.loc, "\"");
+				ret ~= ctx.statement(node.loc, "  }");
 			ret ~= ctx.statement(node.loc, "}} else {");
 		}
 
@@ -340,10 +345,10 @@ private string getElementMixin(ref CTX ctx, in Node node)
 		ctx.depth++;
 		ctx.prettyNewLine();
 	}
-	
+
 	foreach (i, c; node.contents)
 		ret ~= ctx.getNodeContentsMixin(c, i == 0);
-	
+
 	if (need_newline) {
 		ctx.depth--;
 		ctx.prettyNewLine();
@@ -549,6 +554,22 @@ unittest {
 	assert(compile!(`div.foo(class="bar")`) == `<div class="foo bar"></div>`);
 	assert(compile!(`div(class="foo")`) == `<div class="foo"></div>`);
 	assert(compile!(`div#foo(class='')`) == `<div id="foo"></div>`);
+
+	// issue 19
+	assert(compile!(`input(checked=false)`) == `<input/>`);
+	assert(compile!(`input(checked=true)`) == `<input checked="checked"/>`);
+	assert(compile!(`input(checked=(true && false))`) == `<input/>`);
+	assert(compile!(`input(checked=(true || false))`) == `<input checked="checked"/>`);
+
+	assert(compile!(q{- import std.algorithm.searching : any;
+	input(checked=([false].any))}) == `<input/>`);
+	assert(compile!(q{- import std.algorithm.searching : any;
+	input(checked=([true].any))}) == `<input checked="checked"/>`);
+
+	assert(compile!(q{- bool foo() { return false; }
+	input(checked=foo)}) == `<input/>`);
+	assert(compile!(q{- bool foo() { return true; }
+	input(checked=foo)}) == `<input checked="checked"/>`);
 
 	// issue 520
 	assert(compile!("- auto cond = true;\ndiv(someattr=cond ? \"foo\" : null)") == "<div someattr=\"foo\"></div>");
