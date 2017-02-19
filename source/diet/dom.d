@@ -135,8 +135,15 @@ bool isText(const(Attribute) att) { return att.contents.length == 0 || att.conte
 	/** Removes all content if it conists of only white space. */
 	void stripIfOnlyWhitespace()
 	{
-		if (contents.length == 1 && contents[0].kind == NodeContent.Kind.text && contents[0].value.ctstrip.length == 0)
+		if (!this.hasNonWhitespaceContent)
 			contents = null;
+	}
+
+	/** Determines if this node has any non-whitespace contents. */
+	bool hasNonWhitespaceContent()
+	const {
+		import std.algorithm.searching : any;
+		return contents.any!(c => c.kind != NodeContent.Kind.text || c.value.ctstrip.length > 0);
 	}
 
 	/** Strips any leading whitespace from the contents. */

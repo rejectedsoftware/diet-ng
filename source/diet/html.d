@@ -326,10 +326,9 @@ private string getElementMixin(ref CTX ctx, in Node node)
 		default: break;
 		case "area", "base", "basefont", "br", "col", "embed", "frame",	"hr", "img", "input",
 				"keygen", "link", "meta", "param", "source", "track", "wbr":
-			enforcep(!node.contents.length, "Singular HTML element '"~node.name~"' may not have contents.", node.loc);
+			enforcep(!node.hasNonWhitespaceContent, "Singular HTML element '"~node.name~"' may not have contents.", node.loc);
 			ret ~= ctx.rawText(node.loc, "/>");
 			ctx.prettyNewLine();
-			enforcep(node.contents.length == 0, "Singular tag <"~node.name~"> may not have contents.", node.loc);
 			return ret;
 	}
 
@@ -682,4 +681,8 @@ unittest { // singular tags should be each on their own line
 	enum dst = "<p>foo</p>\n<link/>\n<link/>";
 	@dietTraits struct T { enum HTMLOutputStyle htmlOutputStyle = HTMLOutputStyle.pretty; }
 	assert(utCompile!(src, T) == dst);
+}
+
+unittest { // ignore whitespace content for singular tags
+	assert(utCompile!("link  ") == "<link/>");
 }
