@@ -685,4 +685,5 @@ unittest { // singular tags should be each on their own line
 
 unittest { // ignore whitespace content for singular tags
 	assert(utCompile!("link  ") == "<link/>");
+	assert(utCompile!("link  \n\t  ") == "<link/>");
 }
