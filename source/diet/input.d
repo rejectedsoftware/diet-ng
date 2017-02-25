@@ -31,12 +31,16 @@ import diet.traits : DietTraitsAttribute;
 */
 template collectFiles(string root_file)
 {
+	enum collectFiles = collectFiles!(root_file, stripUTF8BOM(import(root_file)));
+}
+/// ditto
+template collectFiles(string root_file, string root_contents)
+{
 	import std.algorithm.searching : canFind;
-	enum contents = stripUTF8BOM(import(root_file));
-	enum baseFiles = collectReferencedFiles!(root_file, contents);
+	enum baseFiles = collectReferencedFiles!(root_file, root_contents);
 	static if (baseFiles.canFind!(f => f.name == root_file))
 		enum collectFiles = baseFiles;
-	else enum collectFiles = InputFile(root_file, contents) ~ baseFiles;
+	else enum collectFiles = InputFile(root_file, root_contents) ~ baseFiles;
 }
 
 /// Encapsulates a single input file.
@@ -118,11 +122,4 @@ private InputFile[] merge(InputFile[] a, InputFile[] b)
 		if (!a.canFind!(g => g.name == f.name))
 			ret ~= f;
 	return ret;
-}
-
-private string stripUTF8BOM(string input)
-{
-	if (input.length >= 3 && input[0 .. 3] == [0xEF, 0xBB, 0xBF])
-		return input[3 .. $];
-	return input;
 }

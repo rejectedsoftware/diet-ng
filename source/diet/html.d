@@ -32,8 +32,32 @@ import diet.traits;
 */
 template compileHTMLDietFile(string filename, ALIASES...)
 {
+	import diet.internal.string : stripUTF8BOM;
+	alias compileHTMLDietFile = compileHTMLDietFileString!(filename, stripUTF8BOM(import(filename)), ALIASES);
+}
+
+
+/** Compiles a Diet template given as a string, with support for includes and extensions.
+	
+	This function behaves the same as `compileHTMLDietFile`, except that the
+	contents of the file are 
+
+	The final HTML will be written to the given `_diet_output` output range.
+
+	Params:
+		filename = The name to associate with `contents'
+		contents = The contents of the Diet template
+		ALIASES = A list of variables to make available inside of the template,
+			as well as traits structs annotated with the `@dietTraits`
+			attribute.
+		dst = The output range to write the generated HTML to.
+
+	See_Also: `compileHTMLDietFile`, `compileHTMLDietString`, `compileHTMLDietStrings`
+*/
+template compileHTMLDietFileString(string filename, string contents, ALIASES...)
+{
 	import std.conv : to;
-	enum _diet_files = collectFiles!filename;
+	enum _diet_files = collectFiles!(filename, contents);
 
 	version (DietUseCache) enum _diet_use_cache = true;
 	else enum _diet_use_cache = false;
@@ -86,11 +110,12 @@ template compileHTMLDietFile(string filename, ALIASES...)
 		mixin(_dietParser);
 	}
 
-	void compileHTMLDietFile(R)(ref R dst)
+	void compileHTMLDietFileString(R)(ref R dst)
 	{
 		exec(dst);
 	}
 }
+
 
 /** Compiles a Diet template given as a string.
 
@@ -103,7 +128,7 @@ template compileHTMLDietFile(string filename, ALIASES...)
 			attribute.
 		dst = The output range to write the generated HTML to.
 
-	See_Also: `compileHTMLDietString`, `compileHTMLDietStrings`
+	See_Also: `compileHTMLDietFileString`, `compileHTMLDietStrings`
 */
 template compileHTMLDietString(string contents, ALIASES...)
 {
@@ -112,6 +137,7 @@ template compileHTMLDietString(string contents, ALIASES...)
 		compileHTMLDietStrings!(Group!(contents, "diet-string"), ALIASES)(dst);
 	}
 }
+
 
 /** Compiles a set of Diet template files.
 

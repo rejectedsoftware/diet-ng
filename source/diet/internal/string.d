@@ -78,3 +78,10 @@ string sanitizeEscaping(string str)
 	str = dstringUnescape(str);
 	return dstringEscape(str);
 }
+
+string stripUTF8BOM(string input)
+{
+	if (input.length >= 3 && input[0 .. 3] == [0xEF, 0xBB, 0xBF])
+		return input[3 .. $];
+	return input;
+}
