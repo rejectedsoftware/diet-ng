@@ -173,7 +173,7 @@ Will output `<p>0</p><p>1</p>`
 
 ### Text interpolations
 
-D expressions can be embedded within text contents using the *text interpolation* syntax. The expression will first be converted to a string using the conversion rules of `std.conv`, and is then either properly escaped for the output format, or inserted verbatim.
+D expressions can be embedded within text contents using the *text interpolation* syntax. The expression will first be converted to a string using the conversion rules of [std.conv](http://dlang.org/phobos/std_conv.html), and is then either properly escaped for the output format, or inserted verbatim.
 
 The syntax for escaped processing is `#{...}` and should always be used, unless the expression is expected to yield a string that has the same format as the output (e.g. HTML). For verbatim output, use `!{...}`.
 
@@ -217,10 +217,45 @@ Filters
 Includes
 --------
 
-`include file(.ext)`
+With includes it is possible to embed one template in another. The included template gets pasted at the position of the include-keyword. The indentation of the include-portion will propagate to the included template.
 
-**TODO!**
+Command: `include file(.ext)`
 
+Example:
+
+	// main.dt
+	doctype html
+	html
+		head
+			title includeExample
+		body
+			h2  the following content is not in this file ...
+			include otherfile
+
+
+	// otherfile.dt	
+	h3 ... But In the other file and this
+	include yetanotherfile
+
+
+	// yetanotherfile.dt
+	h4 in yet anotherfile
+
+Outputs:
+
+	<!DOCTYPE html>
+	<html>
+		<head>
+			<title>includeExample</title>
+		</head>
+		<body>
+			<h2> the following content is not in this file ... </h2>
+			<h3> ... But In the other file and this </h3>
+			<h4> in yet another file </h4>
+		</body>
+	</html>
+
+In the case of error `Missing include input file` check [templates placement](#templates-placement).
 
 Blocks and Extensions
 ---------------------
@@ -241,6 +276,11 @@ Legacy syntax: `!!! ...` will be transformed to `doctype ...`
 
 **TODO!**
 
+Templates placement
+-------------------
+
+Diet looks for templates according to the list of directories specified in the parameter stringImportPaths of dub config file (see dub documentation for [json](https://code.dlang.org/package-format?lang=json#build-settings) or [sdl](https://code.dlang.org/package-format?lang=sdl#build-settings) format). Default value is `views/`.
+This applies to a method call `compileHTMLDietFile` and directives in the file being processed. `compileHTMLDietString` at the moment can not find include files by yourself, it is necessary to take additional steps (see answer [here](http://forum.rejectedsoftware.com/groups/rejectedsoftware.vibed/post/41058)).
 
 Grammar
 -------
