@@ -31,6 +31,7 @@ import diet.traits : DietTraitsAttribute;
 */
 template collectFiles(string root_file)
 {
+	import diet.internal.string : stripUTF8BOM;
 	enum collectFiles = collectFiles!(root_file, stripUTF8BOM(import(root_file)));
 }
 /// ditto
