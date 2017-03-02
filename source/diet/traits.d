@@ -19,7 +19,7 @@ import diet.dom;
 			The first character will be converted to lower case, so that a
 			function `filterCss` will be available as `:css` within the Diet
 			template.)
-		$(LI `FilterCallback[string] filters` - A dictionary of runtime filter
+		$(LI `SafeFilterCallback[string] filters` - A dictionary of runtime filter
 			functions that will be used to for filter nodes that don't have an
 			available compile-time filter or contain string interpolations.)
 	)
@@ -133,7 +133,9 @@ Document applyTraits(TRAITS...)(Document doc)
 	return doc;
 }
 
-alias FilterCallback = void delegate(in char[] input, scope CharacterSink output) @safe;
+deprecated("Use SafeFilterCallback instead.")
+alias FilterCallback = void delegate(in char[] input, scope CharacterSink output);
+alias SafeFilterCallback = void delegate(in char[] input, scope CharacterSink output) @safe;
 alias CharacterSink = void delegate(in char[]) @safe;
 
 void filter(ALIASES...)(in char[] input, string filter, CharacterSink output)
@@ -206,7 +208,7 @@ unittest {
 	@dietTraits
 	static struct CTX {
 		static string filterFoo(string str) { return "("~str~")"; }
-		static FilterCallback[string] filters;
+		static SafeFilterCallback[string] filters;
 	}
 
 	CTX.filters["foo"] = (input, scope output) { output("(R"); output(input); output("R)"); };
@@ -248,7 +250,7 @@ unittest {
 
 	@dietTraits
 	static struct CTX {
-		static FilterCallback[string] filters;
+		static SafeFilterCallback[string] filters;
 	}
 	CTX.filters["foo"] = (input, scope output) { output(input); };
 
