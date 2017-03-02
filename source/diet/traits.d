@@ -133,8 +133,8 @@ Document applyTraits(TRAITS...)(Document doc)
 	return doc;
 }
 
-alias FilterCallback = void delegate(in char[] input, scope CharacterSink output);
-alias CharacterSink = void delegate(in char[]) @safe nothrow;
+alias FilterCallback = void delegate(in char[] input, scope CharacterSink output) @safe;
+alias CharacterSink = void delegate(in char[]) @safe;
 
 void filter(ALIASES...)(in char[] input, string filter, CharacterSink output)
 {
@@ -192,7 +192,7 @@ private string generateFilterChainMixin(string[] chain, NodeContent[] contents)
 			oname = format("__f%s_app", i);
 			ret ~= q{auto %s = appender!(char[]);}.format(oname);
 		} else oname = dietOutputRangeName;
-		ret ~= q{%s.filter!ALIASES("%s", s => %s.put(s));}.format(iname, dstringEscape(f), oname);
+		ret ~= q{%s.filter!ALIASES("%s", (in char[] s) @safe { %s.put(s); });}.format(iname, dstringEscape(f), oname);
 		if (i > 0) ret ~= q{auto __f%s = %s.data;}.format(i, oname);
 	}
 
@@ -235,6 +235,25 @@ unittest {
 	dst = appender!string;
 	dst.compileHTMLDietString!(":foo text !{1}", CTX);
 	assert(dst.data == "(Rtext 1R)");
+}
+
+@safe unittest {
+	import diet.html : compileHTMLDietString;
+
+	static struct R {
+		void put(char) @safe {}
+		void put(in char[]) @safe {}
+		void put(dchar) @safe {}
+	}
+
+	@dietTraits
+	static struct CTX {
+		static FilterCallback[string] filters;
+	}
+	CTX.filters["foo"] = (input, scope output) { output(input); };
+
+	R r;
+	r.compileHTMLDietString!(":foo bar", CTX);
 }
 
 private struct DietTraitsAttribute {}
