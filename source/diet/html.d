@@ -267,6 +267,7 @@ private string getHTMLMixin(ref CTX ctx, in Node node, bool first)
 		case Node.SpecialName.hidden: return null;
 		case Node.SpecialName.text:
 			string ret;
+			ctx.inhibitNewLine();
 			if (!first)
 				ret ~= ctx.rawText(node.loc, "\n");
 			foreach (i, c; node.contents)
@@ -280,6 +281,17 @@ private string getElementMixin(ref CTX ctx, in Node node)
 	import std.algorithm : countUntil;
 
 	bool need_newline = ctx.needPrettyNewline(node.contents);
+
+	bool is_singular_tag;
+	// determine if we need a closing tag or have a singular tag
+	switch (node.name) {
+		default: break;
+		case "area", "base", "basefont", "br", "col", "embed", "frame",	"hr", "img", "input",
+				"keygen", "link", "meta", "param", "source", "track", "wbr":
+			is_singular_tag = true;
+			need_newline = true;
+			break;
+	}
 
 	// write tag name
 	string tagname = node.name.length ? node.name : "div";
@@ -353,14 +365,11 @@ private string getElementMixin(ref CTX ctx, in Node node)
 	}
 
 	// determine if we need a closing tag or have a singular tag
-	switch (node.name) {
-		default: break;
-		case "area", "base", "basefont", "br", "col", "embed", "frame",	"hr", "img", "input",
-				"keygen", "link", "meta", "param", "source", "track", "wbr":
-			enforcep(!node.hasNonWhitespaceContent, "Singular HTML element '"~node.name~"' may not have contents.", node.loc);
-			ret ~= ctx.rawText(node.loc, "/>");
-			ctx.prettyNewLine();
-			return ret;
+	if (is_singular_tag) {
+		enforcep(!node.hasNonWhitespaceContent, "Singular HTML element '"~node.name~"' may not have contents.", node.loc);
+		ret ~= ctx.rawText(node.loc, "/>");
+		if (need_newline) ctx.prettyNewLine();
+		return ret;
 	}
 
 	ret ~= ctx.rawText(node.loc, ">");
@@ -381,7 +390,8 @@ private string getElementMixin(ref CTX ctx, in Node node)
 
 	// write end tag
 	ret ~= ctx.rawText(node.loc, "</"~tagname~">");
-	ctx.prettyNewLine();
+	if (need_newline)
+		ctx.prettyNewLine();
 
 	return ret;
 }
@@ -535,6 +545,7 @@ private struct CTX {
 	}
 
 	void prettyNewLine() { newlinePending = true; }
+	void inhibitNewLine() { newlinePending = false; }
 
 	bool needPrettyNewline(in NodeContent[] contents) {
 		import std.algorithm.searching : any;
@@ -677,7 +688,7 @@ unittest { // issue 4 - nested text in code
 		compileHTMLDietString!(diet, ALIASES)(dst);
 		return strip(cast(string)(dst.data));
 	}
-	assert(compile!"- if (true)\n\t| int bar;" == "int bar;", compile!"- if (true)\n\t| int bar;");
+	assert(compile!"- if (true)\n\t| int bar;" == "int bar;");
 }
 
 unittest { // class instance variables
@@ -706,7 +717,7 @@ unittest { // raw interpolation for non-copyable range
 }
 
 unittest {
-	assert(utCompile!(".foo(class=true?\"bar\":\"baz\")") == "<div class=\"foo bar\"></div>", utCompile!".foo(class=true?\"bar\":\"baz\")");
+	assert(utCompile!(".foo(class=true?\"bar\":\"baz\")") == "<div class=\"foo bar\"></div>");
 }
 
 version (unittest) {
@@ -720,7 +731,7 @@ version (unittest) {
 }
 
 unittest { // blank lines in text blocks
-	assert(utCompile!("pre.\n\tfoo\n\n\tbar") == "<pre>foo\n\nbar</pre>", utCompile!("pre.\n\tfoo\n\n\tbar"));
+	assert(utCompile!("pre.\n\tfoo\n\n\tbar") == "<pre>foo\n\nbar</pre>");
 }
 
 unittest { // singular tags should be each on their own line
@@ -733,4 +744,11 @@ unittest { // singular tags should be each on their own line
 unittest { // ignore whitespace content for singular tags
 	assert(utCompile!("link  ") == "<link/>");
 	assert(utCompile!("link  \n\t  ") == "<link/>");
+}
+
+unittest { // no extraneous newlines before text lines
+	@dietTraits struct T { enum HTMLOutputStyle htmlOutputStyle = HTMLOutputStyle.pretty; }
+	import std.conv : to;
+	assert(utCompile!("foo\n\tbar text1\n\t| text2", T) == "<foo>\n\t<bar>text1</bar>\ntext2\n</foo>");
+	assert(utCompile!("foo\n\tbar: baz\n\t| text2", T) == "<foo>\n\t<bar>\n\t\t<baz></baz>\n\t</bar>\ntext2\n</foo>");
 }
