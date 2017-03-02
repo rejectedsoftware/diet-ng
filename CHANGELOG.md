@@ -1,7 +1,17 @@
 Changelog
 =========
 
-v1.1.4 - 2016-02-23
+v1.2.0 - 2017-03-02
+-------------------
+
+- Added `compileHTMLDietFileString`, a variant of `compileHTMLDietString` that can make use of includes and extensions - [issue #24][issue24]
+- Fixed a compile error for filter nodes and output ranges that are not `nothrow`
+- Fixed extraneous newlines getting inserted in front of HTML text nodes when pretty printing was enabled
+
+[issue24]: https://github.com/rejectedsoftware/diet-ng/issues/24
+
+
+v1.1.4 - 2017-02-23
 -------------------
 
 - Fixes formatting of singluar elements in pretty HTML output - [issue #18][issue18]
