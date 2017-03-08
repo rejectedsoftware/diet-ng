@@ -45,7 +45,7 @@ template compileHTMLDietFile(string filename, ALIASES...)
 	The final HTML will be written to the given `_diet_output` output range.
 
 	Params:
-		filename = The name to associate with `contents'
+		filename = The name to associate with `contents`
 		contents = The contents of the Diet template
 		ALIASES = A list of variables to make available inside of the template,
 			as well as traits structs annotated with the `@dietTraits`
