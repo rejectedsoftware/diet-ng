@@ -1,6 +1,14 @@
 Changelog
 =========
 
+v1.2.1 - 2017-04-18
+-------------------
+
+- Fixed/implemented HTML white space inhibition using the `<`/`>` suffixes - [issue #27][issue27]
+
+[issue27]: https://github.com/rejectedsoftware/diet-ng/issues/27
+
+
 v1.2.0 - 2017-03-02
 -------------------
 
