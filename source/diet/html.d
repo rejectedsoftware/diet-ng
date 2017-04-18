@@ -190,7 +190,7 @@ string getHTMLMixin(in Document doc, string range_name = dietOutputRangeName, HT
 	string ret = "import diet.internal.html : htmlEscape, htmlAttribEscape;\n";
 	ret ~= "import std.format : formattedWrite;\n";
 	foreach (i, n; doc.nodes)
-		ret ~= ctx.getHTMLMixin(n, i == 0);
+		ret ~= ctx.getHTMLMixin(n, false);
 	ret ~= ctx.flushRawText();
 	return ret;
 }
@@ -257,28 +257,29 @@ private @property template getHTMLOutputStyle(TRAITS...)
 	} else enum getHTMLOutputStyle = HTMLOutputStyle.compact;
 }
 
-private string getHTMLMixin(ref CTX ctx, in Node node, bool first)
+private string getHTMLMixin(ref CTX ctx, in Node node, bool in_pre)
 {
 	switch (node.name) {
-		default: return ctx.getElementMixin(node);
+		default: return ctx.getElementMixin(node, in_pre);
 		case "doctype": return ctx.getDoctypeMixin(node);
-		case Node.SpecialName.code: return ctx.getCodeMixin(node);
+		case Node.SpecialName.code: return ctx.getCodeMixin(node, in_pre);
 		case Node.SpecialName.comment: return ctx.getCommentMixin(node);
 		case Node.SpecialName.hidden: return null;
 		case Node.SpecialName.text:
 			string ret;
-			ctx.inhibitNewLine();
-			if (!first)
-				ret ~= ctx.rawText(node.loc, "\n");
 			foreach (i, c; node.contents)
-				ret ~= ctx.getNodeContentsMixin(c, i == 0);
+				ret ~= ctx.getNodeContentsMixin(c, in_pre);
+			if (in_pre) ctx.plainNewLine();
+			else ctx.prettyNewLine();
 			return ret;
 	}
 }
 
-private string getElementMixin(ref CTX ctx, in Node node)
+private string getElementMixin(ref CTX ctx, in Node node, bool in_pre)
 {
 	import std.algorithm : countUntil;
+
+	if (node.name == "pre") in_pre = true;
 
 	bool need_newline = ctx.needPrettyNewline(node.contents);
 
@@ -296,7 +297,11 @@ private string getElementMixin(ref CTX ctx, in Node node)
 	// write tag name
 	string tagname = node.name.length ? node.name : "div";
 	string ret;
-	if (need_newline) ctx.prettyNewLine();
+	if (node.attribs & NodeAttribs.fitOutside || in_pre)
+		ctx.inhibitNewLine();
+	else if (need_newline)
+		ctx.prettyNewLine();
+	
 	ret ~= ctx.rawText(node.loc, "<"~tagname);
 
 	bool had_class = false;
@@ -368,7 +373,8 @@ private string getElementMixin(ref CTX ctx, in Node node)
 	if (is_singular_tag) {
 		enforcep(!node.hasNonWhitespaceContent, "Singular HTML element '"~node.name~"' may not have contents.", node.loc);
 		ret ~= ctx.rawText(node.loc, "/>");
-		if (need_newline) ctx.prettyNewLine();
+		if (need_newline && !(node.attribs & NodeAttribs.fitOutside))
+			ctx.prettyNewLine();
 		return ret;
 	}
 
@@ -377,30 +383,35 @@ private string getElementMixin(ref CTX ctx, in Node node)
 	// write contents
 	if (need_newline) {
 		ctx.depth++;
-		ctx.prettyNewLine();
+		if (!(node.attribs & NodeAttribs.fitInside) && !in_pre)
+			ctx.prettyNewLine();
 	}
 
 	foreach (i, c; node.contents)
-		ret ~= ctx.getNodeContentsMixin(c, i == 0);
+		ret ~= ctx.getNodeContentsMixin(c, in_pre);
 
-	if (need_newline) {
+	if (need_newline && !in_pre) {
 		ctx.depth--;
-		ctx.prettyNewLine();
-	}
+		if (!(node.attribs & NodeAttribs.fitInside) && !in_pre)
+			ctx.prettyNewLine();
+	} else ctx.inhibitNewLine();
 
 	// write end tag
 	ret ~= ctx.rawText(node.loc, "</"~tagname~">");
-	if (need_newline)
+
+	if ((node.attribs & NodeAttribs.fitOutside) || in_pre)
+		ctx.inhibitNewLine();
+	else if (need_newline)
 		ctx.prettyNewLine();
 
 	return ret;
 }
 
-private string getNodeContentsMixin(ref CTX ctx, in NodeContent c, bool first)
+private string getNodeContentsMixin(ref CTX ctx, in NodeContent c, bool in_pre)
 {
 	final switch (c.kind) with (NodeContent.Kind) {
 		case node:
-			return getHTMLMixin(ctx, c.node, first);
+			return getHTMLMixin(ctx, c.node, in_pre);
 		case text:
 			return ctx.rawText(c.loc, c.value);
 		case interpolation:
@@ -466,7 +477,7 @@ private string getDoctypeMixin(ref CTX ctx, in Node node)
 	return ctx.rawText(node.loc, "<"~dstringEscape(doctype_str)~">");
 }
 
-private string getCodeMixin(ref CTX ctx, in ref Node node)
+private string getCodeMixin(ref CTX ctx, in ref Node node, bool in_pre)
 {
 	enforcep(node.attributes.length == 0, "Code lines may not have attributes.", node.loc);
 	enforcep(node.attribs == NodeAttribs.none, "Code lines may not specify translation or text block suffixes.", node.loc);
@@ -480,7 +491,7 @@ private string getCodeMixin(ref CTX ctx, in ref Node node)
 			got_code = true;
 		} else {
 			assert(c.kind == NodeContent.Kind.node);
-			ret ~= ctx.getHTMLMixin(c.node, i == 0 || (got_code && i == 1));
+			ret ~= ctx.getHTMLMixin(c.node, in_pre);
 		}
 	}
 	ret ~= ctx.statement(node.loc, "}");
@@ -492,19 +503,27 @@ private string getCommentMixin(ref CTX ctx, in ref Node node)
 	string ret = ctx.rawText(node.loc, "<!--");
 	ctx.depth++;
 	foreach (i, c; node.contents)
-		ret ~= ctx.getNodeContentsMixin(c, i == 0);
+		ret ~= ctx.getNodeContentsMixin(c, false);
 	ctx.depth--;
 	ret ~= ctx.rawText(node.loc, "-->");
 	return ret;
 }
 
 private struct CTX {
+	enum NewlineState {
+		none,
+		plain,
+		pretty,
+		inhibit
+	}
+
 	bool isHTML5;
 	bool pretty;
 	int depth = 0;
 	string rangeName;
-	bool inRawText;
-	bool newlinePending, anyText;
+	bool inRawText = false;
+	NewlineState newlineState = NewlineState.none;
+	bool anyText;
 
 	pure string statement(ARGS...)(Location loc, string fmt, ARGS args)
 	{
@@ -517,7 +536,7 @@ private struct CTX {
 	pure string textStatement(ARGS...)(Location loc, string fmt, ARGS args)
 	{
 		string ret;
-		if (pretty && newlinePending) ret ~= rawText(loc, null);
+		if (newlineState != NewlineState.none) ret ~= rawText(loc, null);
 		ret ~= statement(loc, fmt, args);
 		return ret;
 	}
@@ -544,8 +563,9 @@ private struct CTX {
 		return null;
 	}
 
-	void prettyNewLine() { newlinePending = true; }
-	void inhibitNewLine() { newlinePending = false; }
+	void plainNewLine() { if (newlineState != NewlineState.inhibit) newlineState = NewlineState.plain; }
+	void prettyNewLine() { if (newlineState != NewlineState.inhibit) newlineState = NewlineState.pretty; }
+	void inhibitNewLine() { newlineState = NewlineState.inhibit; }
 
 	bool needPrettyNewline(in NodeContent[] contents) {
 		import std.algorithm.searching : any;
@@ -554,12 +574,17 @@ private struct CTX {
 
 	private pure string outputPendingNewline()
 	{
-		if (pretty && newlinePending) {
-			import std.array : replicate;
-			newlinePending = false;
-			return anyText ? "\n"~"\t".replicate(depth) : null;
+		auto st = newlineState;
+		newlineState = NewlineState.none;
+
+		final switch (st) {
+			case NewlineState.none: return null;
+			case NewlineState.inhibit:return null;
+			case NewlineState.plain: return "\n";
+			case NewlineState.pretty:
+				import std.array : replicate;
+				return anyText ? "\n"~"\t".replicate(depth) : null;
 		}
-		return null;
 	}
 }
 
@@ -746,9 +771,22 @@ unittest { // ignore whitespace content for singular tags
 	assert(utCompile!("link  \n\t  ") == "<link/>");
 }
 
-unittest { // no extraneous newlines before text lines
+unittest {
 	@dietTraits struct T { enum HTMLOutputStyle htmlOutputStyle = HTMLOutputStyle.pretty; }
 	import std.conv : to;
-	assert(utCompile!("foo\n\tbar text1\n\t| text2", T) == "<foo>\n\t<bar>text1</bar>\ntext2\n</foo>");
-	assert(utCompile!("foo\n\tbar: baz\n\t| text2", T) == "<foo>\n\t<bar>\n\t\t<baz></baz>\n\t</bar>\ntext2\n</foo>");
+	// no extraneous newlines before text lines
+	assert(utCompile!("foo\n\tbar text1\n\t| text2", T) == "<foo>\n\t<bar>text1</bar>text2\n</foo>");
+	assert(utCompile!("foo\n\tbar: baz\n\t| text2", T) == "<foo>\n\t<bar>\n\t\t<baz></baz>\n\t</bar>\n\ttext2\n</foo>");
+	// fit inside/outside + pretty printing - issue #27
+	assert(utCompile!("| foo\na<> bar\n| baz", T) == "foo<a>bar</a>baz");
+	assert(utCompile!("foo\n\ta< bar", T) == "<foo>\n\t<a>bar</a>\n</foo>");
+	assert(utCompile!("foo\n\ta> bar", T) == "<foo><a>bar</a></foo>");
+	assert(utCompile!("a\nfoo<\n\ta bar\nb", T) == "<a></a>\n<foo><a>bar</a></foo>\n<b></b>");
+	assert(utCompile!("a\nfoo>\n\ta bar\nb", T) == "<a></a><foo>\n\t<a>bar</a>\n</foo><b></b>");
+	// hard newlines in pre blocks
+	assert(utCompile!("pre\n\t| foo\n\t| bar", T) == "<pre>foo\nbar</pre>");
+	assert(utCompile!("pre\n\tcode\n\t\t| foo\n\t\t| bar", T) == "<pre><code>foo\nbar</code></pre>");
+	// always hard breaks for text blocks
+	assert(utCompile!("pre.\n\tfoo\n\tbar", T) == "<pre>foo\nbar</pre>");
+	assert(utCompile!("foo.\n\tfoo\n\tbar", T) == "<foo>foo\nbar</foo>");
 }
