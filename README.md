@@ -1,7 +1,7 @@
 Diet-NG
 =======
 
-Diet is a generic compile-time template system based on an XML-like structure. The syntax is heavily influenced by [pug](https://pugjs.org/) (formerly "Jade") and outputting dynamic HTML is the primary goal. It supports pluggable transformation modules, as well as output modules, so that many other uses are possible.
+Diet is a generic compile-time template system based on an XML-like structure. The syntax is heavily influenced by [pug](https://pugjs.org/) (formerly "Jade") and [Haml](http://haml.info/) and outputting dynamic HTML is the primary goal. It supports pluggable transformation modules, as well as output modules, so that many other uses are possible.
 
 See the preliminary [Specification](SPEC.md) for a syntax overview.
 
