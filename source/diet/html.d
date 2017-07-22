@@ -33,14 +33,15 @@ import diet.traits;
 template compileHTMLDietFile(string filename, ALIASES...)
 {
 	import diet.internal.string : stripUTF8BOM;
-	alias compileHTMLDietFile = compileHTMLDietFileString!(filename, stripUTF8BOM(import(filename)), ALIASES);
+	private static immutable contents = stripUTF8BOM(import(filename));
+	alias compileHTMLDietFile = compileHTMLDietFileString!(filename, contents, ALIASES);
 }
 
 
 /** Compiles a Diet template given as a string, with support for includes and extensions.
-	
+
 	This function behaves the same as `compileHTMLDietFile`, except that the
-	contents of the file are 
+	contents of the file are
 
 	The final HTML will be written to the given `_diet_output` output range.
 
@@ -54,7 +55,7 @@ template compileHTMLDietFile(string filename, ALIASES...)
 
 	See_Also: `compileHTMLDietFile`, `compileHTMLDietString`, `compileHTMLDietStrings`
 */
-template compileHTMLDietFileString(string filename, string contents, ALIASES...)
+template compileHTMLDietFileString(string filename, alias contents, ALIASES...)
 {
 	import std.conv : to;
 	enum _diet_files = collectFiles!(filename, contents);
@@ -106,7 +107,7 @@ template compileHTMLDietFileString(string filename, string contents, ALIASES...)
 	private void exec(R)(ref R _diet_output)
 	{
 		mixin(localAliasesMixin!(0, ALIASES));
-		//pragma(msg, getHTMLMixin(nodes));
+		//pragma(msg, _dietParser);
 		mixin(_dietParser);
 	}
 
@@ -301,7 +302,7 @@ private string getElementMixin(ref CTX ctx, in Node node, bool in_pre)
 		ctx.inhibitNewLine();
 	else if (need_newline)
 		ctx.prettyNewLine();
-	
+
 	ret ~= ctx.rawText(node.loc, "<"~tagname);
 
 	bool had_class = false;

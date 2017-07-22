@@ -32,10 +32,11 @@ import diet.traits : DietTraitsAttribute;
 template collectFiles(string root_file)
 {
 	import diet.internal.string : stripUTF8BOM;
-	enum collectFiles = collectFiles!(root_file, stripUTF8BOM(import(root_file)));
+	private static immutable contents = stripUTF8BOM(import(root_file));
+	enum collectFiles = collectFiles!(root_file, contents);
 }
 /// ditto
-template collectFiles(string root_file, string root_contents)
+template collectFiles(string root_file, alias root_contents)
 {
 	import std.algorithm.searching : canFind;
 	enum baseFiles = collectReferencedFiles!(root_file, root_contents);
@@ -51,7 +52,7 @@ struct InputFile {
 }
 
 /** Helper template to aggregate a list of compile time values.
-	
+
 	This is similar to `AliasSeq`, but does not auto-expand.
 */
 template Group(A...) {
@@ -75,7 +76,7 @@ template localAliasesMixin(int i, ALIASES...)
 	}
 }
 
-private template collectReferencedFiles(string file_name, string file_contents)
+private template collectReferencedFiles(string file_name, alias file_contents)
 {
 	import std.path : extension;
 
