@@ -1052,7 +1052,7 @@ private bool parseTag(ref string input, ref size_t idx, ref Node dst, ref bool h
 			enforcep(value.length > 0, "Expected id.", loc);
 			enforcep(!have_id, "Only one \"id\" definition using '#' is allowed.", loc);
 			have_id = true;
-			dst.attributes ~= Attribute(loc, "id", [AttributeContent(AttributeContent.Kind.text, value)]);
+			dst.attributes ~= Attribute.text("id", value, loc);
 		} else if (input[idx] == '.') {
 			// node classes
 			if (idx+1 >= input.length || input[idx+1].isWhite)
@@ -1060,7 +1060,7 @@ private bool parseTag(ref string input, ref size_t idx, ref Node dst, ref bool h
 			idx++;
 			auto value = skipIdent(input, idx, "-_", loc);
 			enforcep(value.length > 0, "Expected class name identifier.", loc);
-			dst.attributes ~= Attribute(loc, "class", [AttributeContent(AttributeContent.Kind.text, value)]);
+			dst.attributes ~= Attribute.text("class", value, loc);
 		} else break;
 	}
 
@@ -1270,7 +1270,7 @@ private void parseAttributes(ref string input, ref size_t i, ref Node node, in r
 			parseAttributeText(value[1 .. $-1], content, loc);
 			node.attributes ~= Attribute(loc, name, content);
 		} else {
-			node.attributes ~= Attribute(loc, name, [AttributeContent.interpolation(value)]);
+			node.attributes ~= Attribute.expr(name, value, loc);
 		}
 	}
 

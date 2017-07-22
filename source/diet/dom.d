@@ -38,6 +38,21 @@ string expectExpression(const(Attribute) att)
 bool isExpression(const(Attribute) att) { return att.contents.length == 1 && att.contents[0].kind == AttributeContent.Kind.interpolation; }
 bool isText(const(Attribute) att) { return att.contents.length == 0 || att.contents.length == 1 && att.contents[0].kind == AttributeContent.Kind.text; }
 
+/** Converts an array of attribute contents to node contents.
+*/
+NodeContent[] toNodeContent(in AttributeContent[] contents, Location loc)
+{
+	auto ret = new NodeContent[](contents.length);
+	foreach (i, ref c; contents) {
+		final switch (c.kind) {
+			case AttributeContent.Kind.text: ret[i] = NodeContent.text(c.value, loc); break;
+			case AttributeContent.Kind.interpolation: ret[i] = NodeContent.interpolation(c.value, loc); break;
+			case AttributeContent.Kind.rawInterpolation: ret[i] = NodeContent.rawInterpolation(c.value, loc); break;
+		}
+	}
+	return ret;
+}
+
 
 /** Encapsulates a full Diet template document.
 */
@@ -174,16 +189,25 @@ bool isText(const(Attribute) att) { return att.contents.length == 0 || att.conte
 	/// Tests if the node consists only of text and interpolations, but doesn't contain child nodes.
 	bool isProceduralTextNode() const { import std.algorithm.searching : all; return contents.all!(c => c.kind != NodeContent.Kind.node); }
 
+	bool hasAttribute(string name)
+	const {
+
+		foreach (ref a; this.attributes)
+			if (a.name == name)
+				return true;
+		return false;
+	}
+
 	/** Returns a given named attribute.
 
 		If the attribute doesn't exist, an empty value will be returned.
 	*/
 	inout(Attribute) getAttribute(string name)
-	inout {
+	inout @trusted {
 		foreach (ref a; this.attributes)
 			if (a.name == name)
 				return a;
-		return Attribute(this.loc, name, null);
+		return cast(inout)Attribute(this.loc, name, null);
 	}
 
 	void setAttribute(Attribute att)
@@ -242,6 +266,18 @@ struct Attribute {
 	string name;
 	/// Value of the attribute
 	AttributeContent[] contents;
+
+	/// Creates a new attribute with a static text value.
+	static Attribute text(string name, string value, Location loc) { return Attribute(loc, name, [AttributeContent.text(value)]); }
+	/// Creates a new attribute with an expression based value.
+	static Attribute expr(string name, string value, Location loc) { return Attribute(loc, name, [AttributeContent.interpolation(value)]); }
+
+	this(Location loc, string name, AttributeContent[] contents)
+	{
+		this.name = name;
+		this.contents = contents;
+		this.loc = loc;
+	}
 
 	/// Creates a copy of the attribute.
 	@property Attribute dup() const { return Attribute(loc, name, contents.dup); }
