@@ -22,6 +22,8 @@ import diet.dom;
 		$(LI `SafeFilterCallback[string] filters` - A dictionary of runtime filter
 			functions that will be used to for filter nodes that don't have an
 			available compile-time filter or contain string interpolations.)
+		$(LI `alias processors = AliasSeq!(...)` - A list of callables taking
+			a `Document` to modify its contents)
 	)
 */
 @property DietTraitsAttribute dietTraits() { return DietTraitsAttribute.init; }
@@ -129,6 +131,14 @@ Document applyTraits(TRAITS...)(Document doc)
 	}
 
 	foreach (ref n; doc.nodes) processNode(n, false);
+
+	// apply DOM processors
+	foreach (T; TRAITS) {
+		static if (is(typeof(T.processors.length))) {
+			foreach (p; T.processors)
+				p(doc);
+		}
+	}
 
 	return doc;
 }
