@@ -1,6 +1,14 @@
 Changelog
 =========
 
+v1.3.0 - 2017-07-23
+-------------------
+
+- Heavily reduced the length of template symbol named generated during compilation, resulting in a lot less binary bloat
+- Added support for a `.processors` field in traits structs that contains a list or arbitrary DOM modification functions
+- Add DOM manipulation convenience functions
+
+
 v1.2.1 - 2017-04-18
 -------------------
 
