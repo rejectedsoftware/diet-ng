@@ -203,6 +203,18 @@ unittest { // test basic functionality
 		])
 	]);
 
+	// multiline attribute expression
+	assert(parseDiet("foo(\n\tatt=1+2,\n\tfoo=bar\n)").nodes == [
+		new Node(ln(0), "foo", [
+			Attribute(ln(0), "att", [
+				AttributeContent.interpolation(`1+2`),
+			]),
+			Attribute(ln(0), "foo", [
+				AttributeContent.interpolation(`bar`),
+			])
+		])
+	]);
+
 	// special nodes
 	assert(parseDiet("//comment").nodes == [
 		new Node(ln(0), Node.SpecialName.comment, null, [NodeContent.text("comment", ln(0))], NodeAttribs.rawTextNode)
@@ -1239,16 +1251,16 @@ private void parseAttributes(ref string input, ref size_t i, ref Node node, in r
 	assert(i < input.length && input[i] == '(');
 	i++;
 
-	skipWhitespace(input, i);
+	skipAnyWhitespace(input, i);
 	while (i < input.length && input[i] != ')') {
 		string name = parseIdent(input, i, ",)=", loc);
 		string value;
-		skipWhitespace(input, i);
+		skipAnyWhitespace(input, i);
 		if( i < input.length && input[i] == '=' ){
 			i++;
-			skipWhitespace(input, i);
+			skipAnyWhitespace(input, i);
 			enforcep(i < input.length, "'=' must be followed by attribute string.", loc);
-			value = skipExpression(input, i, loc);
+			value = skipExpression(input, i, loc, true);
 			assert(i <= input.length);
 			if (isStringLiteral(value) && value[0] == '\'') {
 				auto tmp = dstringUnescape(value[1 .. $-1]);
@@ -1260,7 +1272,7 @@ private void parseAttributes(ref string input, ref size_t i, ref Node node, in r
 		enforcep(input[i] == ')' || input[i] == ',', "Unexpected text following attribute: '"~input[0..i]~"' ('"~input[i..$]~"')", loc);
 		if (input[i] == ',') {
 			i++;
-			skipWhitespace(input, i);
+			skipAnyWhitespace(input, i);
 		}
 
 		if (name == "class" && value == `""`) continue;
@@ -1388,11 +1400,13 @@ private string skipIndent(ref string input)
 
 private bool isIndentChar(dchar ch) { return ch == ' ' || ch == '\t'; }
 
-private string skipWhitespace(in ref string s, ref size_t idx)
+private string skipAnyWhitespace(in ref string s, ref size_t idx)
 {
+	import std.ascii : isWhite;
+
 	size_t start = idx;
 	while (idx < s.length) {
-		if (s[idx] == ' ') idx++;
+		if (s[idx].isWhite) idx++;
 		else break;
 	}
 	return s[start .. idx];
@@ -1454,7 +1468,7 @@ unittest {
 	assert(!isStringLiteral(`"name" value="#{name}"`));
 }
 
-private string skipExpression(in ref string s, ref size_t idx, in ref Location loc)
+private string skipExpression(in ref string s, ref size_t idx, in ref Location loc, bool multiline = false)
 {
 	string clamp_stack;
 	size_t start = idx;
@@ -1463,7 +1477,7 @@ private string skipExpression(in ref string s, ref size_t idx, in ref Location l
 		switch (s[idx]) {
 			default: break;
 			case '\n', '\r':
-				enforcep(false, "Unexpected end of line.", loc);
+				enforcep(multiline, "Unexpected end of line.", loc);
 				break;
 			case ',':
 				if (clamp_stack.length == 0)

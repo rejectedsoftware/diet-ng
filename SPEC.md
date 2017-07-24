@@ -82,7 +82,7 @@ A tag consists of the following parts, which, if present, must occur in the list
 
   - **Attribute list**
     
-    List of attributes of the form `(att1=value, att2)`. An attribute must be a valid *identifier*. The value part can take any of the following forms:
+    List of attributes of the form `(att1=value, att2)`. Attributes can have new lines but the children must still be indented as usual. An attribute must be a valid *identifier*. The value part can take any of the following forms:
 
     - Valid D expression
     - String literal with double-quotes, which may contain *interpolations*
