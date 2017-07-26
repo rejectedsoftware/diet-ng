@@ -120,9 +120,8 @@ A tag consists of the following parts, which, if present, must occur in the list
     foo>
       a bar
     // Generates
-    <div></div><foo>
-      <a>bar</a>
-    </foo>
+    <div></div>
+    <foo><a>bar</a></foo>
     ```
     - A single `>` will instruct the generator not to emit additional white space around the generated HTML element.
     ```html
@@ -130,8 +129,9 @@ A tag consists of the following parts, which, if present, must occur in the list
     foo<
       a bar
     // Generates
-    <div></div>
-    <foo><a>bar</a></foo>
+    <div></div><foo>
+      <a>test</a>
+    </foo>
     ```
 
     You might also combine both whitespace-removal directives using `<>` or `><` which will get rid of all whitespaces associated with the tag inside the generated HTML. You can use this for example for a horizontal row of elements or buttons that shouldn't have any spaces in between them.
@@ -159,7 +159,7 @@ A tag consists of the following parts, which, if present, must occur in the list
 
     or when using inside vibe.d you use it with a `translationContext`.
 
-Alternatively to a tag you may also place a `| text` node which will insert the raw text (`text` in this case) into the HTML document. You can use this to combine tags into text or foreach loops adding text. Adding a second space will start inserting actual spaces into the inserted text as only everything after the `| ` is consumed, see [Text nodes](text-nodes).
+Instead of a tag you may also place a `| text` node which will insert the raw text (`text` in this case) into the HTML document. You can use this to set a tag content to a combination of tags and text, or you could use foreach loops adding text with this, etc. Adding a second space will start inserting actual spaces into the inserted text as only everything after the `| ` is consumed, see [Text nodes](text-nodes).
 
 All parts are optional, except that at least one of tag name, id, or class name must be present. The text that follows the tag definition determines how the following text is interpreted when determining the node's contents:
 
