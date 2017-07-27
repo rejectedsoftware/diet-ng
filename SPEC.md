@@ -70,33 +70,96 @@ A tag consists of the following parts, which, if present, must occur in the list
 
   - **Tag name**
 
-    The name must be an *identifier*, that may additionally contain the following characters: `-_:`
+    The name must be an *identifier*, that may additionally contain the following characters: `-_:`. Without any additional parts this will output an element `<identifier>` or if it can have children (everything except a few selected [HTML tags](source/diet/html.d#291)) it will surround the children with `<identifier></identifier>` instead. The tag name can be omitted if an element ID or a class name is present, in which case it will default to `div` for HTML templates.
 
   - **Element ID**
 
-    The ID must be prefixed by a `#` character and must be a valid *identifier* with the following additionally permitted characters: `-_`. For HTML templates, the ID will be output as an "id" attribute of the HTML element.
+    The ID must be prefixed by a `#` character and must be a valid *identifier* with the following additionally permitted characters: `-_`. For HTML templates, the ID will be output as an "id" attribute of the HTML element. There must only be one ID per element. If the tag name has been omitted but an ID is present, the tag name will be `div` for HTML templates.
 
   - **Style class list**
 
-    List of class names, where each class name is prefixed by a `.`. A class name must be a valid *identifier* with the following additionally permitted characters: `-_`. For HTML templates, multiple class names will be merged into a single "class" attribute (classes separated by space characters).
+    List of class names, where each class name is prefixed by a `.`. A class name must be a valid *identifier* with the following additionally permitted characters: `-_`. For HTML templates, multiple class names will be merged into a single "class" attribute (classes separated by space characters). If the tag name has been omitted but at least one class name is present, the tag name will be `div` for HTML templates.
 
   - **Attribute list**
     
-    List of attributes of the form `(att1=value, att2)`. Attributes can have new lines but the children must still be indented as usual. An attribute must be a valid *identifier*. The value part can take any of the following forms:
+    List of attributes of the form `(att1=value, att2)`. Attributes can have new lines but the children must still be indented as usual. An attribute name must be a valid *identifier*. The value part can take any of the following forms:
 
-    - Valid D expression
-    - String literal with double-quotes, which may contain *interpolations*
-    - String literal with single-quotes, which may contain *interpolations*
-    - No value part - equivalent to a boolean value of `true`
+    - a valid D expression
+
+      ```d
+      a(href=user.url) Me
+      // Generates (user = {url: "/bob"})
+      <a href="/bob">Me</a>
+      ```
+
+      which gets compiled into the executable and can use runtime values passed via the render function, see [Embedded D code](#embedded-d-code).
+
+    - a string literal with double-quotes `"` or single-quotes `'`, which may contain *interpolations*
+
+      ```d
+      img(src="/images/avatar_#{picture.id}.png")
+      // Generates (picture = {id: 4})
+      <img src="/images/avatar_4.png"/>
+      ```
+
+    - a boolean value or no value part. It looks like a normal HTML5 shortened attribute but will generate valid XHTML attributes.
+
+      ```d
+      button(enabled)
+      button(enabled=false)
+      // Generates
+      <button enabled="enabled"></button>
+      <button></button>
+      ```
 
   - **Whitespace-removal directives**
 
     - A single `<` will instruct the generator not to emit additional white space within the generated HTML element.
+    ```html
+    div
+    foo>
+      a bar
+    // Generates
+    <div></div>
+    <foo><a>bar</a></foo>
+    ```
     - A single `>` will instruct the generator not to emit additional white space around the generated HTML element.
+    ```html
+    div
+    foo<
+      a bar
+    // Generates
+    <div></div><foo>
+      <a>test</a>
+    </foo>
+    ```
+
+    You might also combine both whitespace-removal directives using `<>` or `><` which will get rid of all whitespaces associated with the tag inside the generated HTML. You can use this for example for a horizontal row of elements or buttons that shouldn't have any spaces in between them.
 
   - **Translation directive**
 
     A single `&` will mark the node's contents to be subject to translation (in i18n contexts)
+
+    ```
+    h1& website.title
+    ```
+
+    To implement the translate function you need to add a `static string translate(string text)` which must work at compile time inside your diet context.
+
+    ```d
+    @dietTraits
+    struct Context {
+      static string translate(string text) {
+        return text == "Hello, World!" ? "Hallo, Welt!" : text;
+      }
+    }
+    auto dst = appender!string;
+    dst.compileHTMLDietFile!("diet.dt", Context);
+    ```
+
+    or when using inside vibe.d you use it with a `translationContext`.
+
+Instead of a tag you may also place a `| text` node which will insert the raw text (`text` in this case) into the HTML document. You can use this to set a tag content to a combination of tags and text, or you could use foreach loops adding text with this, etc. Adding a second space will start inserting actual spaces into the inserted text as only everything after the `| ` is consumed, see [Text nodes](text-nodes).
 
 All parts are optional, except that at least one of tag name, id, or class name must be present. The text that follows the tag definition determines how the following text is interpreted when determining the node's contents:
 
@@ -141,6 +204,13 @@ Comments
 
 Comments are prefixed with `//`. The line itself, as well as any nested lines following it will be treated as contents of the comment. Adding a single dash (`//-`) will force the comment contents to not appear in the generated result. Otherwise, if the output format supports it, the contents will appear as a comment in the output.
 
+	// Looking for a HTML job? jobs.localhost
+	//- Password = 123456
+
+Generates
+
+	<!-- Looking for a HTML job? jobs.localhost -->
+
 
 Embedded D code
 ---------------
@@ -181,7 +251,7 @@ Any `#` or `!` that is not followed by a `{` (or `[` in case of inline tags) wil
 
 Example:
 
-    p This text #{"cont"+"ains"} dynamically generated !{"<i>"+"text"+"</i>"}.
+    p This text #{"cont"~"ains"} dynamically generated !{"<i>"~"text"~"</i>"}.
     p It uses the syntax \#{...} or \!{...}.
 
 Outputs:
