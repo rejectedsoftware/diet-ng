@@ -617,6 +617,16 @@ unittest { // issue #14 - blocks in includes
 	]);
 }
 
+unittest { // issue #32 - numeric id/class
+	Location ln(int l) { return Location("string", l); }
+	assert(parseDiet("foo.01#02").nodes == [
+		new Node(ln(0), "foo", [
+			Attribute(ln(0), "class", [AttributeContent.text("01")]),
+			Attribute(ln(0), "id", [AttributeContent.text("02")])
+		])
+	]);
+}
+
 
 /** Dummy translation function that returns the input unmodified.
 */
@@ -939,7 +949,7 @@ Node[] parseDietRaw(alias TR)(InputFile file)
 				input = input[1 .. $];
 				size_t idx = 0;
 				if (chain.length) chain ~= ' ';
-				chain ~= skipIdent(input, idx, "-_", loc);
+				chain ~= skipIdent(input, idx, "-_", loc, false, true);
 				input = input[idx .. $];
 				if (input.startsWith(' ')) input = input[1 .. $];
 			} while (input.startsWith(':'));
@@ -1048,7 +1058,7 @@ private bool parseTag(ref string input, ref size_t idx, ref Node dst, ref bool h
 	import std.ascii : isWhite;
 
 	dst.name = skipIdent(input, idx, ":-_", loc, true);
-	
+
 	// a trailing ':' is not part of the tag name, but signals a nested node
 	if (dst.name.endsWith(":")) {
 		dst.name = dst.name[0 .. $-1];
@@ -1361,14 +1371,14 @@ private string skipUntilClosingBracket(in ref string s, ref size_t idx, in ref L
 	assert(false);
 }
 
-private string skipIdent(in ref string s, ref size_t idx, string additional_chars, in ref Location loc, bool accept_empty = false)
+private string skipIdent(in ref string s, ref size_t idx, string additional_chars, in ref Location loc, bool accept_empty = false, bool require_alpha_start = false)
 {
 	import std.ascii : isAlpha;
 
 	size_t start = idx;
 	while (idx < s.length) {
 		if (isAlpha(s[idx])) idx++;
-		else if (start != idx && s[idx] >= '0' && s[idx] <= '9') idx++;
+		else if ((!require_alpha_start || start != idx) && s[idx] >= '0' && s[idx] <= '9') idx++;
 		else {
 			bool found = false;
 			foreach (ch; additional_chars)
