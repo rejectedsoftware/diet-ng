@@ -24,6 +24,8 @@ import diet.dom;
 			available compile-time filter or contain string interpolations.)
 		$(LI `alias processors = AliasSeq!(...)` - A list of callables taking
 			a `Document` to modify its contents)
+		$(LI `HTMLOutputStyle htmlOutputStyle` - An enum to configure
+		    the output style of the generated HTML, e.g. compact or pretty)
 	)
 */
 @property DietTraitsAttribute dietTraits() { return DietTraitsAttribute.init; }
