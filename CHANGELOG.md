@@ -41,7 +41,7 @@ v1.1.4 - 2017-02-23
 -------------------
 
 - Fixes formatting of singluar elements in pretty HTML output - [issue #18][issue18]
-- Added support for Boolean attributes that are sourced from a propert/implicit function call (by Sebastian Wilzbach) - [issue #19][issue19], [pull #20][issue20]
+- Added support for Boolean attributes that are sourced from a property/implicit function call (by Sebastian Wilzbach) - [issue #19][issue19], [pull #20][issue20]
 
 [issue18]: https://github.com/rejectedsoftware/diet-ng/issues/18
 [issue19]: https://github.com/rejectedsoftware/diet-ng/issues/19
