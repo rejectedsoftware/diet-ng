@@ -1,6 +1,16 @@
 Changelog
 =========
 
+v1.4.0 - 2017-08-13
+-------------------
+
+- Implemented support for multi-line nodes (by Jan Jurzitza aka WebFreak) - [issue vibe.d#1307][issue1307_vibe.d]
+- The shortcut syntax for class/id attributes is now allowed to start with a digit - [issue #32][issue32]
+
+[issue32]: https://github.com/rejectedsoftware/diet-ng/issues/32
+[issue1307_vibe.d]: https://github.com/rejectedsoftware/vibe.d/issues/1307
+
+
 v1.3.0 - 2017-07-23
 -------------------
 
