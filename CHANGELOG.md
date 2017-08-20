@@ -1,6 +1,14 @@
 Changelog
 =========
 
+v1.4.1 - 2017-08-20
+-------------------
+
+- Adds a Meson project description (by Matthias Klumpp aka ximion) - [pull #37][issue37]
+
+[issue37]: https://github.com/rejectedsoftware/diet-ng/issues/37
+
+
 v1.4.0 - 2017-08-13
 -------------------
 

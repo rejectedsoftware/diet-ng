@@ -1,7 +1,7 @@
 project('Diet-NG', 'd',
     meson_version: '>=0.40',
     license: 'MIT',
-    version: '1.4.0'
+    version: '1.4.1'
 )
 
 project_soversion = '0'
