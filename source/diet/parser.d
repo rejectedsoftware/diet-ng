@@ -47,7 +47,7 @@ import std.range.primitives : empty, front, popFront, popFrontN;
 	Returns:
 		The list of parsed root nodes is returned.
 */
-Document parseDiet(alias TR = identity)(string text, string filename = "string")
+DocumentRef parseDiet(alias TR = identity)(string text, string filename = "string")
 	if (is(typeof(TR(string.init)) == string))
 {
 	InputFile[1] f;
@@ -56,7 +56,7 @@ Document parseDiet(alias TR = identity)(string text, string filename = "string")
 	return parseDiet!TR(f);
 }
 
-Document parseDiet(alias TR = identity)(InputFile[] files)
+DocumentRef parseDiet(alias TR = identity)(InputFile[] files)
 	if (is(typeof(TR(string.init)) == string))
 {
 	import diet.traits;
@@ -487,7 +487,7 @@ unittest { // test expected errors
 }
 
 unittest { // includes
-	Node[] parse(string diet) {
+	NodeArray parse(string diet) {
 		auto files = [
 			InputFile("main.dt", diet),
 			InputFile("inc.dt", "p")
@@ -516,7 +516,7 @@ unittest { // includes
 }
 
 unittest { // extensions
-	Node[] parse(string diet) {
+	NodeArray parse(string diet) {
 		auto files = [
 			InputFile("main.dt", diet),
 			InputFile("root.dt", "html\n\tblock a\n\tblock b"),
@@ -683,7 +683,7 @@ private string parseIdent(in ref string str, ref size_t start,
 	assert(false);
 }
 
-private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref BlockInfo[] blocks, size_t[] import_stack)
+private NodeArray parseDietWithExtensions(FileInfo[] files, size_t file_index, ref BlockInfo[] blocks, size_t[] import_stack)
 {
 	import std.algorithm : all, any, canFind, countUntil, filter, find, map;
 	import std.array : array;
@@ -728,7 +728,7 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref 
 		return parseDietWithExtensions(files, base_idx, blocks, import_stack ~ file_index);
 	}
 
-	static string extractFilename(Node n)
+	static string extractFilename(NodeRef n)
 	{
 		enforcep(n.contents.length >= 1 && n.contents[0].kind != NodeContent.Kind.node,
 			"Missing block name.", n.loc);
@@ -740,10 +740,10 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref 
 		return n.contents[0].value.ctstrip;
 	}
 
-	Nullable!(Node[]) processNode(Node n) {
-		Nullable!(Node[]) ret;
+	Nullable!(NodeArray) processNode(NodeRef n) {
+		Nullable!(NodeArray) ret;
 
-		void insert(Node[] nodes) {
+		void insert(NodeArray nodes) {
 			foreach (i, n; nodes) {
 				auto np = processNode(n);
 				if (!np.isNull()) {
@@ -813,12 +813,12 @@ private struct BlockInfo {
 	}
 	string name;
 	Mode mode = Mode.replace;
-	Node[] contents;
+	NodeArray contents;
 }
 
 private struct FileInfo {
 	string name;
-	Node[] nodes;
+	NodeArray nodes;
 }
 
 
@@ -826,7 +826,7 @@ private struct FileInfo {
 
 	See_Also: `parseDiet`
 */
-Node[] parseDietRaw(alias TR)(InputFile file)
+NodeArray parseDietRaw(alias TR)(InputFile file)
 {
 	import std.algorithm.iteration : map;
 	import std.algorithm.comparison : among;
@@ -836,17 +836,17 @@ Node[] parseDietRaw(alias TR)(InputFile file)
 	auto loc = Location(file.name, 0);
 	int prevlevel = -1;
 	string input = file.contents;
-	Node[] ret;
+	NodeArray ret;
 	// nested stack of nodes
 	// the first dimension is corresponds to indentation based nesting
 	// the second dimension is for in-line nested nodes
-	Node[][] stack;
+	NodeArray[] stack;
 	stack.length = 8;
 	string previndent; // inherited by blank lines
 
 	next_line:
 	while (input.length) {
-		Node pnode;
+		NodeRef pnode;
 		if (prevlevel >= 0 && stack[prevlevel].length) pnode = stack[prevlevel][$-1];
 
 		// skip whitespace at the beginning of the line
@@ -954,7 +954,7 @@ Node[] parseDietRaw(alias TR)(InputFile file)
 				if (input.startsWith(' ')) input = input[1 .. $];
 			} while (input.startsWith(':'));
 
-			Node chn = new Node;
+			NodeRef chn = new Node;
 			chn.loc = loc;
 			chn.name = Node.SpecialName.filter;
 			chn.attribs = NodeAttribs.textNode;
@@ -986,7 +986,7 @@ Node[] parseDietRaw(alias TR)(InputFile file)
 	return ret;
 }
 
-private Node parseTagLine(alias TR)(ref string input, ref Location loc, out bool has_nested)
+private NodeRef parseTagLine(alias TR)(ref string input, ref Location loc, out bool has_nested)
 {
 	size_t idx = 0;
 
@@ -1053,7 +1053,7 @@ private Node parseTagLine(alias TR)(ref string input, ref Location loc, out bool
 	return ret;
 }
 
-private bool parseTag(ref string input, ref size_t idx, ref Node dst, ref bool has_nested, ref Location loc)
+private bool parseTag(ref string input, ref size_t idx, NodeRef dst, ref bool has_nested, ref Location loc)
 {
 	import std.ascii : isWhite;
 
@@ -1155,7 +1155,7 @@ private bool parseTag(ref string input, ref size_t idx, ref Node dst, ref bool h
 	If there a a newline at the end, it will be appended to the contents of the
 	destination node.
 */
-private void parseTextLine(ref string input, ref Node dst, ref Location loc)
+private void parseTextLine(ref string input, NodeRef dst, ref Location loc)
 {
 	import std.algorithm.comparison : among;
 
@@ -1256,7 +1256,7 @@ private string skipLine(ref string input, ref Location loc)
 	return ret;
 }
 
-private void parseAttributes(ref string input, ref size_t i, ref Node node, in ref Location loc)
+private void parseAttributes(ref string input, ref size_t i, NodeRef node, in ref Location loc)
 {
 	assert(i < input.length && input[i] == '(');
 	i++;
