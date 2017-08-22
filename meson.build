@@ -35,11 +35,18 @@ diet_lib = library('diet',
         version: project_version,
         soversion: project_soversion
 )
+
 pkgc.generate(name: 'diet',
               libraries: [diet_lib],
               subdirs: 'd/diet',
               version: project_version,
               description: 'Next generation Diet template compiler.'
+)
+
+# for use by Vibe.d and others which embed this as subproject
+diet_dep = declare_dependency(
+    link_with: [diet_lib],
+    include_directories: [src_dir]
 )
 
 #
