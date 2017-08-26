@@ -343,10 +343,10 @@ private string getElementMixin(ref CTX ctx, in Node node, bool in_pre)
 					ret ~= ctx.statement(node.loc, q{if (%s) %s.put(" %s=\"%s\"");}, expr, ctx.rangeName, att.name, att.name);
 
 				ret ~= ctx.statement(node.loc, "} else "~q{static if (is(typeof(%s) : const(char)[])) }~"{{", expr);
-				ret ~= ctx.statement(node.loc, q{  auto val = %s;}, expr);
-				ret ~= ctx.statement(node.loc, q{  if (val !is null) }~'{');
+				ret ~= ctx.statement(node.loc, q{  auto _diet_val = %s;}, expr);
+				ret ~= ctx.statement(node.loc, q{  if (_diet_val !is null) }~'{');
 					ret ~= ctx.rawText(node.loc, " "~att.name~"=\"");
-					ret ~= ctx.statement(node.loc, q{    %s.filterHTMLAttribEscape(val);}, ctx.rangeName);
+					ret ~= ctx.statement(node.loc, q{    %s.filterHTMLAttribEscape(_diet_val);}, ctx.rangeName);
 					ret ~= ctx.rawText(node.loc, "\"");
 				ret ~= ctx.statement(node.loc, "  }");
 			ret ~= ctx.statement(node.loc, "}} else {");
