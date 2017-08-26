@@ -195,7 +195,7 @@ enum HTMLEscapeFlags {
 	escapeMinimal = 0,
 	escapeQuotes = 1<<0,
 	escapeNewline = 1<<1,
-	escapeUnknown = 1<<2,	
+	escapeUnknown = 1<<2,
 	defaults = escapeNewline,
 	attribute = escapeNewline|escapeQuotes
 }
@@ -226,10 +226,17 @@ private struct HTMLEscapeOutputRange(R)
 			u8seqfill = 0;
 		}
 	}
-	void put(dchar ch) { filterHTMLEscape(*dst, ch); }
+	void put(dchar ch) { filterHTMLEscape(*dst, ch, flags); }
 	void put(in char[] str) { foreach (dchar ch;  str) put(ch); }
 
 	static assert(isOutputRange!(HTMLEscapeOutputRange, char));
+}
+
+unittest { // issue #36
+	auto dst = appender!string();
+	auto rng = HTMLEscapeOutputRange!(typeof(dst))(dst, HTMLEscapeFlags.attribute);
+	rng.put("foo\"bar");
+	assert(dst.data == "foo&quot;bar");
 }
 
 private struct StringAppender {
