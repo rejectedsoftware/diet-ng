@@ -1,6 +1,18 @@
 Changelog
 =========
 
+v1.4.2 - 2017-08-26
+-------------------
+
+- Fixes "variable val is shadowing variable" errors when defining a variable `val` in a template - [issue #35][issue35]
+- Fixes missing escaping for quotes in HTML attributes that are not typed `bool` or `string` - [issue #36][issue36]
+- Tweaked the Meson build description to be usable as a sub project - [pull #39][issue39]
+
+[issue35]: https://github.com/rejectedsoftware/diet-ng/issues/35
+[issue36]: https://github.com/rejectedsoftware/diet-ng/issues/36
+[issue39]: https://github.com/rejectedsoftware/diet-ng/issues/39
+
+
 v1.4.1 - 2017-08-20
 -------------------
 
