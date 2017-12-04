@@ -220,6 +220,14 @@ unittest {
 	);
 	test!".foo"("<div class=\"foo\"></div>");
 	test!"#foo"("<div id=\"foo\"></div>");
+
+	// Issue 40: convenience case for string arrays in HTML attributes
+	test!`- auto a = ["public"];
+foo(class="#{a}")`
+	(`<foo class="public"></foo>`);
+	test!`- auto a = ["a", "b"];
+foo(class="#{a}")`
+	(`<foo class="a b"></foo>`);
 }
 
 
@@ -335,6 +343,7 @@ private string getElementMixin(ref CTX ctx, in Node node, bool in_pre)
 			}
 
 			ret ~= ctx.statement(node.loc, q{
+				// special case: bool
 				static if (is(typeof(() { return %s; }()) == bool) )
 			}~'{', expr);
 				if (ctx.isHTML5)
@@ -342,6 +351,7 @@ private string getElementMixin(ref CTX ctx, in Node node, bool in_pre)
 				else
 					ret ~= ctx.statement(node.loc, q{if (%s) %s.put(" %s=\"%s\"");}, expr, ctx.rangeName, att.name, att.name);
 
+				// special case: string
 				ret ~= ctx.statement(node.loc, "} else "~q{static if (is(typeof(%s) : const(char)[])) }~"{{", expr);
 				ret ~= ctx.statement(node.loc, q{  auto _diet_val = %s;}, expr);
 				ret ~= ctx.statement(node.loc, q{  if (_diet_val !is null) }~'{');
@@ -349,6 +359,17 @@ private string getElementMixin(ref CTX ctx, in Node node, bool in_pre)
 					ret ~= ctx.statement(node.loc, q{    %s.filterHTMLAttribEscape(_diet_val);}, ctx.rangeName);
 					ret ~= ctx.rawText(node.loc, "\"");
 				ret ~= ctx.statement(node.loc, "  }");
+
+			// special case: string[]
+			ret ~= ctx.statement(node.loc, "}} else static if (is(typeof(%s) : string[])) {{", expr);
+			ret ~= ctx.statement(node.loc, "auto val = %s;", expr);
+			ret ~= ctx.statement(node.loc, "import std.array : join;");
+			ret ~= ctx.statement(node.loc, "if (val !is null) { ");
+			ret ~= ctx.rawText(node.loc, " " ~ att.name~`="`);
+			ret ~= ctx.statement(node.loc, `%s.filterHTMLAttribEscape(val.join(" "));`, ctx.rangeName);
+			ret ~= ctx.rawText(node.loc, `"`);
+			ret ~= ctx.statement(node.loc, "  }");
+
 			ret ~= ctx.statement(node.loc, "}} else {");
 		}
 
