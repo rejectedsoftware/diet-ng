@@ -1,4 +1,4 @@
 name "htmlserver"
 dependency "diet-ng" path="../.."
-dependency "vibe-d" version="~>0.8.0"
+dependency "vibe-d" version="~>0.8.3-alpha.1"
 versions "VibeDefaultMain"
