@@ -29,6 +29,7 @@ d:
   - dmd-beta
 
 before_install:
+  - pyenv global system 3.6
   - pip3 install meson>=0.40
 
 install:
