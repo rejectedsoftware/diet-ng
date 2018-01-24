@@ -4,7 +4,7 @@ import vibe.stream.wrapper;
 
 void render(scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
-	auto dst = StreamOutputRange(res.bodyWriter);
+	auto dst = streamOutputRange(res.bodyWriter);
 	int iterations = 10;
 	dst.compileHTMLDietFile!("index.dt", iterations);
 }
