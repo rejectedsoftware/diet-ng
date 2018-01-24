@@ -30,17 +30,17 @@ d:
   - dmd-2.073.2
   - dmd-2.072.2
 
-before_install:
-  - pyenv global system 3.6
-  - pip3 install meson>=0.40
+#before_install:
+  #- pyenv global system 3.6
+  #- pip3 install meson>=0.40
 
-install:
-  - mkdir .ntmp
-  - curl -L https://github.com/ninja-build/ninja/releases/download/v1.7.2/ninja-linux.zip -o .ntmp/ninja-linux.zip
-  - unzip .ntmp/ninja-linux.zip -d .ntmp
+#install:
+  #- mkdir .ntmp
+  #- curl -L https://github.com/ninja-build/ninja/releases/download/v1.7.2/ninja-linux.zip -o .ntmp/ninja-linux.zip
+  #- unzip .ntmp/ninja-linux.zip -d .ntmp
 
-before_script:
-  - export PATH=$PATH:$PWD/.ntmp
+#before_script:
+  #- export PATH=$PATH:$PWD/.ntmp
 
 script:
   - dub build -b release
@@ -49,6 +49,6 @@ script:
   - dub build --root examples/htmlserver
   # test building with Meson
   - mkdir build && cd build
-  - meson ..
-  - ninja -j4
-  - DESTDIR=/tmp/diet_inst_target ninja install
+  #- meson ..
+  #- ninja -j4
+  #- DESTDIR=/tmp/diet_inst_target ninja install
