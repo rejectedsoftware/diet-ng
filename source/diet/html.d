@@ -289,10 +289,17 @@ private string getElementMixin(ref CTX ctx, in Node node, bool in_pre)
 	switch (node.name) {
 		default: break;
 		case "area", "base", "basefont", "br", "col", "embed", "frame",	"hr", "img", "input",
-				"keygen", "link", "meta", "param", "source", "track", "wbr":
+				"keygen", "meta", "param", "source", "track", "wbr":
 			is_singular_tag = true;
 			need_newline = true;
 			break;
+		case "link":
+			if (!ctx.isXML)
+			{
+				is_singular_tag = true;
+				need_newline = true;
+				break;	
+			}
 	}
 
 	// write tag name
@@ -445,6 +452,7 @@ private string getDoctypeMixin(ref CTX ctx, in Node node)
 			break;
 		case "xml":
 			doctype_str = `?xml version="1.0" encoding="utf-8" ?`;
+			ctx.isXML = true;
 			break;
 		case "transitional":
 			doctype_str = `!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" `
@@ -519,6 +527,7 @@ private struct CTX {
 	}
 
 	bool isHTML5;
+	bool isXML;
 	bool pretty;
 	int depth = 0;
 	string rangeName;
