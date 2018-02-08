@@ -475,7 +475,7 @@ private string getDoctypeMixin(ref CTX ctx, in Node node)
 		break;
 	}
 
-	return ctx.rawText(node.loc, "<"~dstringEscape(doctype_str)~">");
+	return ctx.rawText(node.loc, "<"~doctype_str~">");
 }
 
 private string getCodeMixin(ref CTX ctx, in ref Node node, bool in_pre)
@@ -601,6 +601,7 @@ unittest {
 	assert(compile!(`!!! 5`) == `<!DOCTYPE html>`, `_`~compile!(`!!! 5`)~`_`);
 	assert(compile!(`!!! html`) == `<!DOCTYPE html>`);
 	assert(compile!(`doctype html`) == `<!DOCTYPE html>`);
+	assert(compile!(`doctype xml`) == `<?xml version="1.0" encoding="utf-8" ?>`);
 	assert(compile!(`p= 5`) == `<p>5</p>`);
 	assert(compile!(`script= 5`) == `<script>5</script>`);
 	assert(compile!(`style= 5`) == `<style>5</style>`);
