@@ -15,7 +15,7 @@ import diet.dom;
 			translating the text of nodes marked with `&` at compile time. Note
 			that the input string may contain string interpolations.)
 		$(LI `void filterX(string)` - Any number of compile-time filter
-			functions, where "X" is a placeholder for the actual filter name. 
+			functions, where "X" is a placeholder for the actual filter name.
 			The first character will be converted to lower case, so that a
 			function `filterCss` will be available as `:css` within the Diet
 			template.)
@@ -76,7 +76,7 @@ string translate(TRAITS...)(string text)
 }
 
 
-/** Applies any transformations that are defined in the 
+/** Applies any transformations that are defined in the
 */
 Document applyTraits(TRAITS...)(Document doc)
 {
@@ -270,7 +270,7 @@ unittest {
 	r.compileHTMLDietString!(":foo bar", CTX);
 }
 
-private struct DietTraitsAttribute {}
+package struct DietTraitsAttribute {}
 
 private bool hasFilterCT(TRAITS...)(string filter)
 {
