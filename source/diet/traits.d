@@ -76,7 +76,12 @@ string translate(TRAITS...)(string text)
 }
 
 
-/** Applies any transformations that are defined in the
+/** Applies any transformations that are defined in the supplied traits list.
+
+	Transformations are defined by declaring a `processors` sequence in a
+	traits struct.
+
+	See_also: `dietTraits`
 */
 Document applyTraits(TRAITS...)(Document doc)
 {
