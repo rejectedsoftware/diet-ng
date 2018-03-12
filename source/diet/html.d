@@ -286,13 +286,15 @@ private string getElementMixin(ref CTX ctx, in Node node, bool in_pre)
 
 	bool is_singular_tag;
 	// determine if we need a closing tag or have a singular tag
-	switch (node.name) {
-		default: break;
-		case "area", "base", "basefont", "br", "col", "embed", "frame",	"hr", "img", "input",
-				"keygen", "link", "meta", "param", "source", "track", "wbr":
-			is_singular_tag = true;
-			need_newline = true;
-			break;
+	if (ctx.isHTML) {
+		switch (node.name) {
+			default: break;
+			case "area", "base", "basefont", "br", "col", "embed", "frame",	"hr", "img", "input",
+					"keygen", "link", "meta", "param", "source", "track", "wbr":
+				is_singular_tag = true;
+				need_newline = true;
+				break;
+		}
 	}
 
 	// write tag name
@@ -424,6 +426,7 @@ private string getNodeContentsMixin(ref CTX ctx, in NodeContent c, bool in_pre)
 
 private string getDoctypeMixin(ref CTX ctx, in Node node)
 {
+	import std.algorithm.searching : startsWith;
 	import diet.internal.string;
 
 	if (node.name == "!!!")
@@ -445,6 +448,7 @@ private string getDoctypeMixin(ref CTX ctx, in Node node)
 			break;
 		case "xml":
 			doctype_str = `?xml version="1.0" encoding="utf-8" ?`;
+			ctx.isHTML = false;
 			break;
 		case "transitional":
 			doctype_str = `!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" `
@@ -472,6 +476,7 @@ private string getDoctypeMixin(ref CTX ctx, in Node node)
 			break;
 		default:
 			doctype_str = "!DOCTYPE " ~ args;
+			ctx.isHTML = args.startsWith("html ");
 		break;
 	}
 
@@ -518,7 +523,7 @@ private struct CTX {
 		inhibit
 	}
 
-	bool isHTML5;
+	bool isHTML5, isHTML = true;
 	bool pretty;
 	int depth = 0;
 	string rangeName;
@@ -791,4 +796,11 @@ unittest {
 	// always hard breaks for text blocks
 	assert(utCompile!("pre.\n\tfoo\n\tbar", T) == "<pre>foo\nbar</pre>");
 	assert(utCompile!("foo.\n\tfoo\n\tbar", T) == "<foo>foo\nbar</foo>");
+}
+
+unittest { // issue #45 - no singular tags for XML
+	assert(!__traits(compiles, utCompile!("doctype html\nlink foo")));
+	assert(!__traits(compiles, utCompile!("doctype html FOO\nlink foo")));
+	assert(utCompile!("doctype xml\nlink foo") == `<?xml version="1.0" encoding="utf-8" ?><link>foo</link>`);
+	assert(utCompile!("doctype foo\nlink foo") == `<!DOCTYPE foo><link>foo</link>`);
 }
