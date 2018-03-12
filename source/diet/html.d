@@ -208,7 +208,8 @@ unittest {
 	}
 
 	test!"doctype html\nfoo(test=true)"("<!DOCTYPE html><foo test></foo>");
-	test!"doctype X\nfoo(test=true)"("<!DOCTYPE X><foo test=\"test\"></foo>");
+	test!"doctype html X\nfoo(test=true)"("<!DOCTYPE html X><foo test=\"test\"></foo>");
+	test!"doctype X\nfoo(test=true)"("<!DOCTYPE X><foo test=\"test\"/>");
 	test!"foo(test=2+3)"("<foo test=\"5\"></foo>");
 	test!"foo(test='#{2+3}')"("<foo test=\"5\"></foo>");
 	test!"foo #{2+3}"("<foo>5</foo>");
@@ -295,7 +296,7 @@ private string getElementMixin(ref CTX ctx, in Node node, bool in_pre)
 				need_newline = true;
 				break;
 		}
-	}
+	} else if (!node.hasNonWhitespaceContent) is_singular_tag = true;
 
 	// write tag name
 	string tagname = node.name.length ? node.name : "div";
@@ -803,4 +804,9 @@ unittest { // issue #45 - no singular tags for XML
 	assert(!__traits(compiles, utCompile!("doctype html FOO\nlink foo")));
 	assert(utCompile!("doctype xml\nlink foo") == `<?xml version="1.0" encoding="utf-8" ?><link>foo</link>`);
 	assert(utCompile!("doctype foo\nlink foo") == `<!DOCTYPE foo><link>foo</link>`);
+}
+
+unittest { // output empty tags as singular for XML output
+	assert(utCompile!("doctype html\nfoo") == `<!DOCTYPE html><foo></foo>`);
+	assert(utCompile!("doctype xml\nfoo") == `<?xml version="1.0" encoding="utf-8" ?><foo/>`);
 }
