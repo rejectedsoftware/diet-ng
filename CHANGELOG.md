@@ -1,6 +1,22 @@
 Changelog
 =========
 
+v1.4.5 - 2018-03-12
+-------------------
+
+- Avoid singular tag enforcement for non-HTML documents - [issue #45][issue45], [pull #49][issue49]
+- Always output empty XML elements using singular tag syntax - [pull #50][issue50]
+- Fix broken XML doctype string (by Nicholas Wilson) - [pull #47][issue47]
+- Fix deprecation warnings on DMD 2.079.0
+
+Note: 1.4.3 and 1.4.4 just bumped the used vibe.d version of the examples.
+
+[issue45]: https://github.com/rejectedsoftware/diet-ng/issues/45
+[issue47]: https://github.com/rejectedsoftware/diet-ng/issues/47
+[issue49]: https://github.com/rejectedsoftware/diet-ng/issues/49
+[issue50]: https://github.com/rejectedsoftware/diet-ng/issues/50
+
+
 v1.4.2 - 2017-08-26
 -------------------
 
