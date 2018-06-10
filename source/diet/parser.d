@@ -150,7 +150,7 @@ unittest { // test basic functionality
 	assert(parseDiet("foo& test").nodes == [
 		new Node(ln(0), "foo", null, [
 			NodeContent.text("test", ln(0))
-		], NodeAttribs.translated)
+		], NodeAttribs.translated, "test")
 	]);
 
 	// interpolated text
@@ -244,7 +244,7 @@ unittest { // test basic functionality
 		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text(":", ln(0))])
 	]);
 	assert(parseDiet("|&x").nodes == [
-		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text("x", ln(0))], NodeAttribs.translated)
+		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text("x", ln(0))], NodeAttribs.translated, "x")
 	]);
 	assert(parseDiet("-if(x)").nodes == [
 		new Node(ln(0), Node.SpecialName.code, null, [NodeContent.text("if(x)", ln(0))])
@@ -443,7 +443,7 @@ unittest { // translation
 	assert(parseDiet!tr("foo& test").nodes == [
 		new Node(ln(0), "foo", null, [
 			NodeContent.text("(TEST)", ln(0))
-		], NodeAttribs.translated)
+		], NodeAttribs.translated, "test")
 	]);
 
 	assert(parseDiet!tr("foo& test #{x} it").nodes == [
@@ -451,18 +451,18 @@ unittest { // translation
 			NodeContent.text("(TEST ", ln(0)),
 			NodeContent.interpolation("X", ln(0)),
 			NodeContent.text(" IT)", ln(0)),
-		], NodeAttribs.translated)
+		], NodeAttribs.translated, "test #{x} it")
 	]);
 
 	assert(parseDiet!tr("|&x").nodes == [
-		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text("(X)", ln(0))], NodeAttribs.translated)
+		new Node(ln(0), Node.SpecialName.text, null, [NodeContent.text("(X)", ln(0))], NodeAttribs.translated, "x")
 	]);
 
 	assert(parseDiet!tr("foo&.\n\tbar\n\tbaz").nodes == [
 		new Node(ln(0), "foo", null, [
 			NodeContent.text("(BAR)", ln(1)),
 			NodeContent.text("\n(BAZ)", ln(2))
-		], NodeAttribs.translated|NodeAttribs.textNode)
+		], NodeAttribs.translated|NodeAttribs.textNode, "bar\nbaz")
 	]);
 }
 
@@ -883,16 +883,13 @@ Node[] parseDietRaw(alias TR)(InputFile file)
 		// ("." suffix) or pure raw text node (e.g. comments)
 		if (level > prevlevel && prevlevel >= 0) {
 			if (pnode.attribs & NodeAttribs.textNode) {
-				if (!pnode.contents.empty)
+				if (!pnode.contents.empty) {
 					pnode.addText("\n", loc);
+					if (pnode.attribs & NodeAttribs.translated)
+						pnode.translationKey ~= "\n";
+				}
 				if (indent.length) pnode.addText(indent, loc);
-				if (pnode.attribs & NodeAttribs.translated) {
-					size_t idx;
-					Location loccopy = loc;
-					auto ln = TR(skipLine(input, idx, loc));
-					input = input[idx .. $];
-					parseTextLine(ln, pnode, loccopy);
-				} else parseTextLine(input, pnode, loc);
+				parseTextLine!TR(input, pnode, loc);
 				continue;
 			} else if (pnode.attribs & NodeAttribs.rawTextNode) {
 				if (!pnode.contents.empty)
@@ -964,7 +961,7 @@ Node[] parseDietRaw(alias TR)(InputFile file)
 			/*auto tmploc = loc;
 			auto trailing = skipLine(input, loc);
 			if (trailing.length) parseTextLine(input, chn, tmploc);*/
-			parseTextLine(input, chn, loc);
+			parseTextLine!TR(input, chn, loc);
 		} else {
 			// normal tag line
 			bool has_nested;
@@ -996,13 +993,13 @@ private Node parseTagLine(alias TR)(ref string input, ref Location loc, out bool
 	if (input.startsWith("!!! ")) { // legacy doctype support
 		input = input[4 .. $];
 		ret.name = "doctype";
-		parseTextLine(input, ret, loc);
+		parseTextLine!TR(input, ret, loc);
 		return ret;
 	}
 
 	if (input.startsWith('<')) { // inline HTML/XML
 		ret.name = Node.SpecialName.text;
-		parseTextLine(input, ret, loc);
+		parseTextLine!TR(input, ret, loc);
 		return ret;
 	}
 
@@ -1035,14 +1032,10 @@ private Node parseTagLine(alias TR)(ref string input, ref Location loc, out bool
 		if (remainder.length && remainder[0] == ' ') {
 			// parse the rest of the line as text contents (if any non-ws)
 			remainder = remainder[1 .. $];
-			if (ret.attribs & NodeAttribs.translated)
-				remainder = TR(remainder);
-			parseTextLine(remainder, ret, tmploc);
+			parseTextLine!TR(remainder, ret, tmploc);
 		} else if (ret.name == Node.SpecialName.text) {
 			// allow omitting the whitespace for "|" text nodes
-			if (ret.attribs & NodeAttribs.translated)
-				remainder = TR(remainder);
-			parseTextLine(remainder, ret, tmploc);
+			parseTextLine!TR(remainder, ret, tmploc);
 		} else {
 			import std.string : strip;
 			enforcep(remainder.strip().length == 0,
@@ -1155,11 +1148,21 @@ private bool parseTag(ref string input, ref size_t idx, ref Node dst, ref bool h
 	If there a a newline at the end, it will be appended to the contents of the
 	destination node.
 */
-private void parseTextLine(ref string input, ref Node dst, ref Location loc)
+private void parseTextLine(alias TR)(ref string input, ref Node dst, ref Location loc, bool translate = true)
 {
 	import std.algorithm.comparison : among;
 
 	size_t sidx = 0, idx = 0;
+
+	if (translate && dst.attribs & NodeAttribs.translated) {
+		Location loccopy = loc;
+		auto kln = skipLine(input, idx, loc);
+		input = input[idx .. $];
+		dst.translationKey ~= kln;
+		auto tln = TR(kln);
+		parseTextLine!TR(tln, dst, loccopy, false);
+		return;
+	}
 
 	void flushText()
 	{

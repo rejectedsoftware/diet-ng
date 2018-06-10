@@ -114,15 +114,20 @@ NodeContent[] toNodeContent(in AttributeContent[] contents, Location loc)
 	NodeContent[] contents;
 	/// Flags that control the parser and generator behavior.
 	NodeAttribs attribs;
+	/// Original text used to look up the translation (only set if translated)
+	string translationKey;
 
 	/// Constructs a new node.
-	this(Location loc = Location.init, string name = null, Attribute[] attributes = null, NodeContent[] contents = null, NodeAttribs attribs = NodeAttribs.none)
+	this(Location loc = Location.init, string name = null,
+		Attribute[] attributes = null, NodeContent[] contents = null,
+		NodeAttribs attribs = NodeAttribs.none, string translation_key = null)
 	{
 		this.loc = loc;
 		this.name = name;
 		this.attributes = attributes;
 		this.contents = contents;
 		this.attribs = attribs;
+		this.translationKey = translation_key;
 	}
 
 	/// Returns the "id" attribute.
@@ -224,7 +229,7 @@ NodeContent[] toNodeContent(in AttributeContent[] contents, Location loc)
 	override string toString() const {
 		scope (failure) assert(false);
 		import std.string : format;
-		return format("Node(%s, %s, %s, %s, %s)", this.tupleof);
+		return format("Node(%s, \"%s\", %s, %s, %s, \"%s\")", this.tupleof);
 	}
 
 	/// Compares all properties of two nodes for equality.
@@ -319,7 +324,7 @@ struct Attribute {
 struct AttributeContent {
 	@safe nothrow:
 
-	/// 
+	///
 	enum Kind {
 		text,             /// Raw text (will be escaped by the generator as necessary)
 		interpolation,    /// A D expression that will be converted to text at runtime (escaped as necessary)
