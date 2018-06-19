@@ -201,7 +201,7 @@ string renderStaticHTMLDietString(ALIASES...)(string code, string filename = "st
 string renderStaticHTMLDietStrings(ALIASES...)(InputFile[] files)
 {
 	alias TRAITS = DietTraits!ALIASES;
-	return renderHTML(applyTraits!TRAITS(parseDiet(files)));
+	return renderHTML(applyTraits!TRAITS(parseDiet!(translate!TRAITS)(files)));
 }
 
 /** Returns a mixin string that generates HTML for the given DOM tree.
