@@ -338,7 +338,7 @@ private string getHTMLMixin(ref CTX ctx, in Node node, bool in_pre, bool runtime
 
 private string getElementMixin(ref CTX ctx, in Node node, bool in_pre, bool runtime)
 {
-	import std.algorithm : countUntil;
+	import std.algorithm : all, countUntil;
 
 	if (node.name == "pre") in_pre = true;
 
@@ -393,6 +393,11 @@ private string getElementMixin(ref CTX ctx, in Node node, bool in_pre, bool runt
 			if (expr == "true") {
 				if (ctx.isHTML5) ret ~= ctx.rawText(node.loc, " "~att.name);
 				else ret ~= ctx.rawText(node.loc, " "~att.name~"=\""~att.name~"\"");
+				continue;
+			}
+
+			if (expr.all!(a => a >= '0' && a <= '9')) {
+				ret ~= ctx.rawText(node.loc, " "~att.name~"=\""~expr~"\"");
 				continue;
 			}
 
