@@ -275,7 +275,7 @@ unittest {
 	r.compileHTMLDietString!(":foo bar", CTX);
 }
 
-package struct DietTraitsAttribute {}
+struct DietTraitsAttribute {}
 
 private bool hasFilterCT(TRAITS...)(string filter)
 {
