@@ -330,7 +330,7 @@ In the case of error `Missing include input file` check [templates placement](#t
 Blocks and Extensions
 ---------------------
 
-`extend file(.ext)`
+`extends file(.ext)`
 
 **TODO!**
 
