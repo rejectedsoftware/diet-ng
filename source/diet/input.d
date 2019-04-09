@@ -45,6 +45,38 @@ template collectFiles(string root_file, alias root_contents)
 	else enum collectFiles = InputFile(root_file, root_contents) ~ baseFiles;
 }
 
+/// ditto
+InputFile[] collectFilesRT(string file)
+{
+	import std.file : readText;
+	return collectFilesRT(file, readText(file));
+}
+/// ditto
+InputFile[] collectFilesRT(string file, string content)
+{
+	import std.file : exists, readText;
+	import std.path : extension, buildPath, dirName;
+
+	string root = dirName(file);
+	InputFile[] ret = [InputFile(file, content)];
+	foreach (ofile; collectReferences(content))
+	{
+		string p = buildPath(root, ofile);
+		if (!exists(p))
+			p = buildPath(root, ofile ~ file.extension);
+		//if (!exists(p))
+		//	p = ofile;
+		//if (!exists(p))
+		//	p = ofile ~ file.extension;
+		if (!exists(p))
+			continue;
+		string ocontent = readText(p);
+		ret ~= InputFile(ofile, ocontent);
+		ret ~= collectFilesRT(ofile, ocontent);
+	}
+	return ret;
+}
+
 /// Encapsulates a single input file.
 struct InputFile {
 	string name;
@@ -96,7 +128,8 @@ private template collectReferencedFiles(string file_name, alias file_contents)
 	alias collectReferencedFiles = impl!0;
 }
 
-private string[] collectReferences(string content)
+/// Searches for `extends` and `include` nodes and returns all referenced strings.
+string[] collectReferences(string content)
 {
 	import std.string : strip, stripLeft, splitLines;
 	import std.algorithm.searching : startsWith;

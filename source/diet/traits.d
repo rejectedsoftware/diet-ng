@@ -220,7 +220,7 @@ private string generateFilterChainMixin(string[] chain, NodeContent[] contents)
 
 unittest {
 	import std.array : appender;
-	import diet.html : compileHTMLDietString;
+	import diet.html : compileHTMLDietString, renderStaticHTMLDietString;
 
 	@dietTraits
 	static struct CTX {
@@ -231,29 +231,23 @@ unittest {
 	CTX.filters["foo"] = (input, scope output) { output("(R"); output(input); output("R)"); };
 	CTX.filters["bar"] = (input, scope output) { output("(RB"); output(input); output("RB)"); };
 
-	auto dst = appender!string;
-	dst.compileHTMLDietString!(":foo text", CTX);
-	assert(dst.data == "(text)");
+	void test(string code)(string expected, bool runtime = true) {
+		auto dst = appender!string;
+		dst.compileHTMLDietString!(code, CTX);
+		assert(dst.data == expected);
+		if (runtime) {
+			string rt = renderStaticHTMLDietString!CTX(code);
+			assert(rt == expected);
+		}
+	}
 
-	dst = appender!string;
-	dst.compileHTMLDietString!(":foo text\n\tmore", CTX);
-	assert(dst.data == "(text\nmore)");
-
-	dst = appender!string;
-	dst.compileHTMLDietString!(":foo :foo text", CTX);
-	assert(dst.data == "((text))");
-
-	dst = appender!string;
-	dst.compileHTMLDietString!(":bar :foo text", CTX);
-	assert(dst.data == "(RB(text)RB)");
-
-	dst = appender!string;
-	dst.compileHTMLDietString!(":foo :bar text", CTX);
-	assert(dst.data == "(R(RBtextRB)R)");
-
-	dst = appender!string;
-	dst.compileHTMLDietString!(":foo text !{1}", CTX);
-	assert(dst.data == "(Rtext 1R)");
+	test!(":foo text")("(text)");
+	test!(":foo text\n\tmore")("(text\nmore)");
+	test!(":foo :foo text")("((text))");
+	// TODO: the next 2 should work with runtime too!
+	test!(":bar :foo text")("(RB(text)RB)", false);
+	test!(":foo :bar text")("(R(RBtextRB)R)", false);
+	test!(":foo text !{1}")("(Rtext 1R)", false);
 }
 
 @safe unittest {

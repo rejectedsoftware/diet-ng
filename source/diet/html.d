@@ -173,12 +173,44 @@ template compileHTMLDietStrings(alias FILES_GROUP, ALIASES...)
 	}
 }
 
+
+/** Renders a static diet file (without embedded D code) to HTML at runtime.
+
+	See_Also: `compileHTMLDietFile` */
+string renderStaticHTMLDietFile(ALIASES...)(string file)
+{
+	import std.file : readText;
+
+	return renderStaticHTMLDietStrings!ALIASES(collectFilesRT(file, readText(file)));
+}
+
+/** Renders static diet code (without embedded D code) to HTML at runtime.
+
+	See_Also: `compileHTMLDietString` */
+string renderStaticHTMLDietString(ALIASES...)(string code, string filename = "string")
+{
+	InputFile[1] f;
+	f[0].name = filename;
+	f[0].contents = code;
+	return renderStaticHTMLDietStrings!ALIASES(f[]);
+}
+
+/** Renders a static diet file hierarchy (without embedded D code) to HTML at runtime.
+
+	See_Also: `compileHTMLDietStrings` */
+string renderStaticHTMLDietStrings(ALIASES...)(InputFile[] files)
+{
+	alias TRAITS = DietTraits!ALIASES;
+	return renderHTML(applyTraits!TRAITS(parseDiet!(translate!TRAITS)(files)));
+}
+
 /** Returns a mixin string that generates HTML for the given DOM tree.
 
 	Params:
 		nodes = The root nodes of the DOM tree
 		range_name = Optional custom name to use for the output range, defaults
 			to `_diet_output`.
+		style = compact or pretty HTML output style.
 
 	Returns:
 		A string of D statements suitable to be mixed in inside of a function.
@@ -191,25 +223,52 @@ string getHTMLMixin(in Document doc, string range_name = dietOutputRangeName, HT
 	string ret = "import diet.internal.html : htmlEscape, htmlAttribEscape;\n";
 	ret ~= "import std.format : formattedWrite;\n";
 	foreach (i, n; doc.nodes)
-		ret ~= ctx.getHTMLMixin(n, false);
+		ret ~= ctx.getHTMLMixin(n, false, false);
 	ret ~= ctx.flushRawText();
+	return ret;
+}
+
+/** Returns the rendered HTML for a static diet file without embedded D code.
+
+	Params:
+		style = compact or pretty HTML output style.
+
+	Returns:
+		A raw string of the HTML
+*/
+string renderHTML(in Document doc, HTMLOutputStyle style = HTMLOutputStyle.compact)
+{
+	CTX ctx;
+	ctx.pretty = style == HTMLOutputStyle.pretty;
+	ctx.runtime = true;
+	string ret;
+	foreach (n; doc.nodes)
+		ret ~= ctx.getHTMLMixin(n, false, true);
 	return ret;
 }
 
 unittest {
 	import diet.parser;
-	void test(string src)(string expected) {
+	void test(string src)(string expected, bool runtime = false) {
 		import std.array : appender;
+
+		// test compile time
 		static const n = parseDiet(src);
 		auto _diet_output = appender!string();
 		//pragma(msg, getHTMLMixin(n));
 		mixin(getHTMLMixin(n));
 		assert(_diet_output.data == expected, _diet_output.data);
+
+		if (runtime) {
+			// test runtime
+			string rt = renderHTML(n);
+			assert(rt == expected, rt);
+		}
 	}
 
-	test!"doctype html\nfoo(test=true)"("<!DOCTYPE html><foo test></foo>");
-	test!"doctype html X\nfoo(test=true)"("<!DOCTYPE html X><foo test=\"test\"></foo>");
-	test!"doctype X\nfoo(test=true)"("<!DOCTYPE X><foo test=\"test\"/>");
+	test!"doctype html\nfoo(test=true)"("<!DOCTYPE html><foo test></foo>", true);
+	test!"doctype html X\nfoo(test=true)"("<!DOCTYPE html X><foo test=\"test\"></foo>", true);
+	test!"doctype X\nfoo(test=true)"("<!DOCTYPE X><foo test=\"test\"/>", true);
 	test!"foo(test=2+3)"("<foo test=\"5\"></foo>");
 	test!"foo(test='#{2+3}')"("<foo test=\"5\"></foo>");
 	test!"foo #{2+3}"("<foo>5</foo>");
@@ -218,9 +277,9 @@ unittest {
 	test!"- foreach (i; 0 .. 2)\n\tfoo"("<foo></foo><foo></foo>");
 	test!"div(*ngFor=\"\\#item of list\")"(
 		"<div *ngFor=\"#item of list\"></div>"
-	);
-	test!".foo"("<div class=\"foo\"></div>");
-	test!"#foo"("<div id=\"foo\"></div>");
+	, true);
+	test!".foo"("<div class=\"foo\"></div>", true);
+	test!"#foo"("<div id=\"foo\"></div>", true);
 }
 
 
@@ -259,27 +318,27 @@ private @property template getHTMLOutputStyle(TRAITS...)
 	} else enum getHTMLOutputStyle = HTMLOutputStyle.compact;
 }
 
-private string getHTMLMixin(ref CTX ctx, in Node node, bool in_pre)
+private string getHTMLMixin(ref CTX ctx, in Node node, bool in_pre, bool runtime)
 {
 	switch (node.name) {
-		default: return ctx.getElementMixin(node, in_pre);
+		default: return ctx.getElementMixin(node, in_pre, runtime);
 		case "doctype": return ctx.getDoctypeMixin(node);
-		case Node.SpecialName.code: return ctx.getCodeMixin(node, in_pre);
-		case Node.SpecialName.comment: return ctx.getCommentMixin(node);
+		case Node.SpecialName.code: return ctx.getCodeMixin(node, in_pre, runtime);
+		case Node.SpecialName.comment: return ctx.getCommentMixin(node, runtime);
 		case Node.SpecialName.hidden: return null;
 		case Node.SpecialName.text:
 			string ret;
 			foreach (i, c; node.contents)
-				ret ~= ctx.getNodeContentsMixin(c, in_pre);
+				ret ~= ctx.getNodeContentsMixin(c, in_pre, runtime);
 			if (in_pre) ctx.plainNewLine();
 			else ctx.prettyNewLine();
 			return ret;
 	}
 }
 
-private string getElementMixin(ref CTX ctx, in Node node, bool in_pre)
+private string getElementMixin(ref CTX ctx, in Node node, bool in_pre, bool runtime)
 {
-	import std.algorithm : countUntil;
+	import std.algorithm : all, countUntil;
 
 	if (node.name == "pre") in_pre = true;
 
@@ -337,6 +396,11 @@ private string getElementMixin(ref CTX ctx, in Node node, bool in_pre)
 				continue;
 			}
 
+			if (expr.all!(a => a >= '0' && a <= '9')) {
+				ret ~= ctx.rawText(node.loc, " "~att.name~"=\""~expr~"\"");
+				continue;
+			}
+
 			ret ~= ctx.statement(node.loc, q{
 				static if (is(typeof(() { return %s; }()) == bool) )
 			}~'{', expr);
@@ -363,6 +427,7 @@ private string getElementMixin(ref CTX ctx, in Node node, bool in_pre)
 					ret ~= ctx.rawText(node.loc, htmlAttribEscape(v.value));
 					break;
 				case interpolation, rawInterpolation:
+					enforcep(!runtime, "Code interpolation not allowed in static runtime diet templates.", node.loc);
 					ret ~= ctx.statement(node.loc, q{%s.htmlAttribEscape(%s);}, ctx.rangeName, v.value);
 					break;
 			}
@@ -392,7 +457,7 @@ private string getElementMixin(ref CTX ctx, in Node node, bool in_pre)
 	}
 
 	foreach (i, c; node.contents)
-		ret ~= ctx.getNodeContentsMixin(c, in_pre);
+		ret ~= ctx.getNodeContentsMixin(c, in_pre, runtime);
 
 	if (need_newline && !in_pre) {
 		ctx.depth--;
@@ -411,16 +476,18 @@ private string getElementMixin(ref CTX ctx, in Node node, bool in_pre)
 	return ret;
 }
 
-private string getNodeContentsMixin(ref CTX ctx, in NodeContent c, bool in_pre)
+private string getNodeContentsMixin(ref CTX ctx, in NodeContent c, bool in_pre, bool runtime)
 {
 	final switch (c.kind) with (NodeContent.Kind) {
 		case node:
-			return getHTMLMixin(ctx, c.node, in_pre);
+			return getHTMLMixin(ctx, c.node, in_pre, runtime);
 		case text:
 			return ctx.rawText(c.loc, c.value);
 		case interpolation:
+			enforcep(!runtime, "Code interpolation not allowed in static runtime diet templates.", c.loc);
 			return ctx.textStatement(c.loc, q{%s.htmlEscape(%s);}, ctx.rangeName, c.value);
 		case rawInterpolation:
+			enforcep(!runtime, "Code interpolation not allowed in static runtime diet templates.", c.loc);
 			return ctx.textStatement(c.loc, q{() @trusted { return (&%s); } ().formattedWrite("%%s", %s);}, ctx.rangeName, c.value);
 	}
 }
@@ -484,8 +551,9 @@ private string getDoctypeMixin(ref CTX ctx, in Node node)
 	return ctx.rawText(node.loc, "<"~doctype_str~">");
 }
 
-private string getCodeMixin(ref CTX ctx, in ref Node node, bool in_pre)
+private string getCodeMixin(ref CTX ctx, in ref Node node, bool in_pre, bool runtime)
 {
+	enforcep(!runtime, "Code blocks not allowed in static runtime diet templates. ", node.loc);
 	enforcep(node.attributes.length == 0, "Code lines may not have attributes.", node.loc);
 	enforcep(node.attribs == NodeAttribs.none, "Code lines may not specify translation or text block suffixes.", node.loc);
 	if (node.contents.length == 0) return null;
@@ -498,19 +566,19 @@ private string getCodeMixin(ref CTX ctx, in ref Node node, bool in_pre)
 			got_code = true;
 		} else {
 			assert(c.kind == NodeContent.Kind.node);
-			ret ~= ctx.getHTMLMixin(c.node, in_pre);
+			ret ~= ctx.getHTMLMixin(c.node, in_pre, runtime);
 		}
 	}
 	ret ~= ctx.statement(node.loc, "}");
 	return ret;
 }
 
-private string getCommentMixin(ref CTX ctx, in ref Node node)
+private string getCommentMixin(ref CTX ctx, in ref Node node, bool runtime)
 {
 	string ret = ctx.rawText(node.loc, "<!--");
 	ctx.depth++;
 	foreach (i, c; node.contents)
-		ret ~= ctx.getNodeContentsMixin(c, false);
+		ret ~= ctx.getNodeContentsMixin(c, false, runtime);
 	ctx.depth--;
 	ret ~= ctx.rawText(node.loc, "-->");
 	return ret;
@@ -531,12 +599,16 @@ private struct CTX {
 	bool inRawText = false;
 	NewlineState newlineState = NewlineState.none;
 	bool anyText;
+	bool runtime;
 
 	pure string statement(ARGS...)(Location loc, string fmt, ARGS args)
 	{
 		import std.string : format;
 		string ret = flushRawText();
-		ret ~= ("#line %s \"%s\"\n"~fmt~"\n").format(loc.line+1, loc.file, args);
+		if (runtime)
+			ret ~= fmt.format(args);
+		else
+			ret ~= ("#line %s \"%s\"\n"~fmt~"\n").format(loc.line+1, loc.file, args);
 		return ret;
 	}
 
@@ -551,19 +623,19 @@ private struct CTX {
 	pure string rawText(ARGS...)(Location loc, string text)
 	{
 		string ret;
-		if (!this.inRawText) {
+		if (!this.inRawText && !runtime) {
 			ret = this.rangeName ~ ".put(\"";
 			this.inRawText = true;
 		}
 		ret ~= outputPendingNewline();
-		ret ~= dstringEscape(text);
+		ret ~= runtime ? text : dstringEscape(text);
 		anyText = true;
 		return ret;
 	}
 
 	pure string flushRawText()
 	{
-		if (this.inRawText) {
+		if (this.inRawText && !runtime) {
 			this.inRawText = false;
 			return "\");\n";
 		}
