@@ -183,7 +183,7 @@ template compileHTMLDietStrings(alias FILES_GROUP, ALIASES...)
 	Returns:
 		A string of D statements suitable to be mixed in inside of a function.
 */
-string getHTMLMixin(in Document doc, string range_name = dietOutputRangeName, HTMLOutputStyle style = HTMLOutputStyle.compact)
+string getHTMLMixin(in Document.Ref doc, string range_name = dietOutputRangeName, HTMLOutputStyle style = HTMLOutputStyle.compact)
 {
 	CTX ctx;
 	ctx.pretty = style == HTMLOutputStyle.pretty;
@@ -259,7 +259,7 @@ private @property template getHTMLOutputStyle(TRAITS...)
 	} else enum getHTMLOutputStyle = HTMLOutputStyle.compact;
 }
 
-private string getHTMLMixin(ref CTX ctx, in Node node, bool in_pre)
+private string getHTMLMixin(ref CTX ctx, in Node.Ref node, bool in_pre)
 {
 	switch (node.name) {
 		default: return ctx.getElementMixin(node, in_pre);
@@ -277,7 +277,7 @@ private string getHTMLMixin(ref CTX ctx, in Node node, bool in_pre)
 	}
 }
 
-private string getElementMixin(ref CTX ctx, in Node node, bool in_pre)
+private string getElementMixin(ref CTX ctx, in Node.Ref node, bool in_pre)
 {
 	import std.algorithm : countUntil;
 
@@ -425,7 +425,7 @@ private string getNodeContentsMixin(ref CTX ctx, in NodeContent c, bool in_pre)
 	}
 }
 
-private string getDoctypeMixin(ref CTX ctx, in Node node)
+private string getDoctypeMixin(ref CTX ctx, in Node.Ref node)
 {
 	import std.algorithm.searching : startsWith;
 	import diet.internal.string;
@@ -484,7 +484,7 @@ private string getDoctypeMixin(ref CTX ctx, in Node node)
 	return ctx.rawText(node.loc, "<"~doctype_str~">");
 }
 
-private string getCodeMixin(ref CTX ctx, in ref Node node, bool in_pre)
+private string getCodeMixin(ref CTX ctx, in ref Node.Ref node, bool in_pre)
 {
 	enforcep(node.attributes.length == 0, "Code lines may not have attributes.", node.loc);
 	enforcep(node.attribs == NodeAttribs.none, "Code lines may not specify translation or text block suffixes.", node.loc);
@@ -505,7 +505,7 @@ private string getCodeMixin(ref CTX ctx, in ref Node node, bool in_pre)
 	return ret;
 }
 
-private string getCommentMixin(ref CTX ctx, in ref Node node)
+private string getCommentMixin(ref CTX ctx, in ref Node.Ref node)
 {
 	string ret = ctx.rawText(node.loc, "<!--");
 	ctx.depth++;

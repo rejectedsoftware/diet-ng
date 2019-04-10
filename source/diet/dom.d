@@ -18,7 +18,7 @@ string expectText(const(Attribute) att)
 	return att.contents[0].value;
 }
 
-string expectText(const(Node) n)
+string expectText(const(Node.Ref) n)
 {
 	import diet.defs : enforcep;
 	if (n.contents.length == 0) return null;
@@ -56,17 +56,21 @@ NodeContent[] toNodeContent(in AttributeContent[] contents, Location loc)
 
 /** Encapsulates a full Diet template document.
 */
-/*final*/ class Document { // non-final because of https://issues.dlang.org/show_bug.cgi?id=17146
-	Node[] nodes;
+struct Document { // non-final because of https://issues.dlang.org/show_bug.cgi?id=17146
+	alias Ref = Document*;
 
-	this(Node[] nodes) { this.nodes = nodes; }
+	Node.Ref[] nodes;
+
+	this(Node.Ref[] nodes) { this.nodes = nodes; }
 }
 
 
 /** Represents a single node in the DOM tree.
 */
-/*final*/ class Node { // non-final because of https://issues.dlang.org/show_bug.cgi?id=17146
+struct Node { // non-final because of https://issues.dlang.org/show_bug.cgi?id=17146
 	@safe nothrow:
+
+	alias Ref = Node*;
 
 	/// A set of names that identify special-purpose nodes
 	enum SpecialName {
@@ -118,7 +122,7 @@ NodeContent[] toNodeContent(in AttributeContent[] contents, Location loc)
 	string translationKey;
 
 	/// Constructs a new node.
-	this(Location loc = Location.init, string name = null,
+	this(Location loc, string name = null,
 		Attribute[] attributes = null, NodeContent[] contents = null,
 		NodeAttribs attribs = NodeAttribs.none, string translation_key = null)
 	{
@@ -226,20 +230,15 @@ NodeContent[] toNodeContent(in AttributeContent[] contents, Location loc)
 	}
 
 	/// Outputs a simple string representation of the node.
-	override string toString() const {
+	string toString()
+	const nothrow {
 		scope (failure) assert(false);
 		import std.string : format;
 		return format("Node(%s, \"%s\", %s, %s, %s, \"%s\")", this.tupleof);
 	}
 
 	/// Compares all properties of two nodes for equality.
-	override bool opEquals(Object other_) {
-		auto other = cast(Node)other_;
-		if (!other) return false;
-		return this.opEquals(other);
-	}
-
-	bool opEquals(in Node other) const { return this.tupleof == other.tupleof; }
+	bool opEquals(in ref Node other) const nothrow { return this.tupleof == other.tupleof; }
 }
 
 
@@ -363,18 +362,18 @@ struct NodeContent {
 	/// Location of the content in the source file
 	Location loc;
 	/// The node - only used for `Kind.node`
-	Node node;
+	Node* node;
 	/// The string value - either text or a D expression
 	string value;
 
 	/// Creates a new child node content value.
-	static NodeContent tag(Node node) { return NodeContent(Kind.node, node.loc, node); }
+	static NodeContent tag(Node.Ref node) { return NodeContent(Kind.node, node.loc, node); }
 	/// Creates a new text node content value.
-	static NodeContent text(string text, Location loc) { return NodeContent(Kind.text, loc, Node.init, text); }
+	static NodeContent text(string text, Location loc) { return NodeContent(Kind.text, loc, Node.Ref.init, text); }
 	/// Creates a new string interpolation node content value.
-	static NodeContent interpolation(string text, Location loc) { return NodeContent(Kind.interpolation, loc, Node.init, text); }
+	static NodeContent interpolation(string text, Location loc) { return NodeContent(Kind.interpolation, loc, Node.Ref.init, text); }
 	/// Creates a new raw string interpolation node content value.
-	static NodeContent rawInterpolation(string text, Location loc) { return NodeContent(Kind.rawInterpolation, loc, Node.init, text); }
+	static NodeContent rawInterpolation(string text, Location loc) { return NodeContent(Kind.rawInterpolation, loc, Node.Ref.init, text); }
 
 	/// Compares node content for equality.
 	bool opEquals(in ref NodeContent other)
@@ -384,7 +383,7 @@ struct NodeContent {
 		if (this.value != other.value) return false;
 		if (this.node is other.node) return true;
 		if (this.node is null || other.node is null) return false;
-		return this.node.opEquals(other.node);
+		return this.node.opEquals(*other.node);
 	}
 }
 

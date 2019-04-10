@@ -47,7 +47,7 @@ import std.range.primitives : empty, front, popFront, popFrontN;
 	Returns:
 		The list of parsed root nodes is returned.
 */
-Document parseDiet(alias TR = identity)(string text, string filename = "string")
+Document.Ref parseDiet(alias TR = identity)(string text, string filename = "string")
 	if (is(typeof(TR(string.init)) == string))
 {
 	InputFile[1] f;
@@ -56,7 +56,7 @@ Document parseDiet(alias TR = identity)(string text, string filename = "string")
 	return parseDiet!TR(f);
 }
 
-Document parseDiet(alias TR = identity)(InputFile[] files)
+Document.Ref parseDiet(alias TR = identity)(InputFile[] files)
 	if (is(typeof(TR(string.init)) == string))
 {
 	import diet.traits;
@@ -683,7 +683,7 @@ private string parseIdent(in ref string str, ref size_t start,
 	assert(false);
 }
 
-private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref BlockInfo[] blocks, size_t[] import_stack)
+private Node.Ref[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref BlockInfo[] blocks, size_t[] import_stack)
 {
 	import std.algorithm : all, any, canFind, countUntil, filter, find, map;
 	import std.array : array;
@@ -728,7 +728,7 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref 
 		return parseDietWithExtensions(files, base_idx, blocks, import_stack ~ file_index);
 	}
 
-	static string extractFilename(Node n)
+	static string extractFilename(Node.Ref n)
 	{
 		enforcep(n.contents.length >= 1 && n.contents[0].kind != NodeContent.Kind.node,
 			"Missing block name.", n.loc);
@@ -740,10 +740,10 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref 
 		return n.contents[0].value.ctstrip;
 	}
 
-	Nullable!(Node[]) processNode(Node n) {
-		Nullable!(Node[]) ret;
+	Nullable!(Node.Ref[]) processNode(Node.Ref n) {
+		Nullable!(Node.Ref[]) ret;
 
-		void insert(Node[] nodes) {
+		void insert(Node.Ref[] nodes) {
 			foreach (i, n; nodes) {
 				auto np = processNode(n);
 				if (!np.isNull()) {
@@ -813,12 +813,12 @@ private struct BlockInfo {
 	}
 	string name;
 	Mode mode = Mode.replace;
-	Node[] contents;
+	Node.Ref[] contents;
 }
 
 private struct FileInfo {
 	string name;
-	Node[] nodes;
+	Node.Ref[] nodes;
 }
 
 
@@ -826,7 +826,7 @@ private struct FileInfo {
 
 	See_Also: `parseDiet`
 */
-Node[] parseDietRaw(alias TR)(InputFile file)
+Node.Ref[] parseDietRaw(alias TR)(InputFile file)
 {
 	import std.algorithm.iteration : map;
 	import std.algorithm.comparison : among;
@@ -836,17 +836,17 @@ Node[] parseDietRaw(alias TR)(InputFile file)
 	auto loc = Location(file.name, 0);
 	int prevlevel = -1;
 	string input = file.contents;
-	Node[] ret;
+	Node.Ref[] ret;
 	// nested stack of nodes
 	// the first dimension is corresponds to indentation based nesting
 	// the second dimension is for in-line nested nodes
-	Node[][] stack;
+	Node.Ref[][] stack;
 	stack.length = 8;
 	string previndent; // inherited by blank lines
 
 	next_line:
 	while (input.length) {
-		Node pnode;
+		Node.Ref pnode;
 		if (prevlevel >= 0 && stack[prevlevel].length) pnode = stack[prevlevel][$-1];
 
 		// skip whitespace at the beginning of the line
@@ -889,7 +889,7 @@ Node[] parseDietRaw(alias TR)(InputFile file)
 						pnode.translationKey ~= "\n";
 				}
 				if (indent.length) pnode.addText(indent, loc);
-				parseTextLine!TR(input, pnode, loc);
+				parseTextLine!TR(input, *pnode, loc);
 				continue;
 			} else if (pnode.attribs & NodeAttribs.rawTextNode) {
 				if (!pnode.contents.empty)
@@ -951,7 +951,7 @@ Node[] parseDietRaw(alias TR)(InputFile file)
 				if (input.startsWith(' ')) input = input[1 .. $];
 			} while (input.startsWith(':'));
 
-			Node chn = new Node;
+			auto chn = new Node;
 			chn.loc = loc;
 			chn.name = Node.SpecialName.filter;
 			chn.attribs = NodeAttribs.textNode;
@@ -961,7 +961,7 @@ Node[] parseDietRaw(alias TR)(InputFile file)
 			/*auto tmploc = loc;
 			auto trailing = skipLine(input, loc);
 			if (trailing.length) parseTextLine(input, chn, tmploc);*/
-			parseTextLine!TR(input, chn, loc);
+			parseTextLine!TR(input, *chn, loc);
 		} else {
 			// normal tag line
 			bool has_nested;
@@ -983,7 +983,7 @@ Node[] parseDietRaw(alias TR)(InputFile file)
 	return ret;
 }
 
-private Node parseTagLine(alias TR)(ref string input, ref Location loc, out bool has_nested)
+private Node.Ref parseTagLine(alias TR)(ref string input, ref Location loc, out bool has_nested)
 {
 	size_t idx = 0;
 
@@ -993,13 +993,13 @@ private Node parseTagLine(alias TR)(ref string input, ref Location loc, out bool
 	if (input.startsWith("!!! ")) { // legacy doctype support
 		input = input[4 .. $];
 		ret.name = "doctype";
-		parseTextLine!TR(input, ret, loc);
+		parseTextLine!TR(input, *ret, loc);
 		return ret;
 	}
 
 	if (input.startsWith('<')) { // inline HTML/XML
 		ret.name = Node.SpecialName.text;
-		parseTextLine!TR(input, ret, loc);
+		parseTextLine!TR(input, *ret, loc);
 		return ret;
 	}
 
@@ -1008,7 +1008,7 @@ private Node parseTagLine(alias TR)(ref string input, ref Location loc, out bool
 		ret.name = Node.SpecialName.text;
 		if (idx < input.length && input[idx] == '&') { ret.attribs |= NodeAttribs.translated; idx++; }
 	} else { // normal tag
-		if (parseTag(input, idx, ret, has_nested, loc))
+		if (parseTag(input, idx, *ret, has_nested, loc))
 			return ret;
 	}
 
@@ -1032,10 +1032,10 @@ private Node parseTagLine(alias TR)(ref string input, ref Location loc, out bool
 		if (remainder.length && remainder[0] == ' ') {
 			// parse the rest of the line as text contents (if any non-ws)
 			remainder = remainder[1 .. $];
-			parseTextLine!TR(remainder, ret, tmploc);
+			parseTextLine!TR(remainder, *ret, tmploc);
 		} else if (ret.name == Node.SpecialName.text) {
 			// allow omitting the whitespace for "|" text nodes
-			parseTextLine!TR(remainder, ret, tmploc);
+			parseTextLine!TR(remainder, *ret, tmploc);
 		} else {
 			import std.string : strip;
 			enforcep(remainder.strip().length == 0,
