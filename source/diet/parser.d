@@ -1203,7 +1203,7 @@ private bool parseTag(ref string input, ref size_t idx, ref Node dst, ref bool h
 	If there a a newline at the end, it will be appended to the contents of the
 	destination node.
 */
-private void parseTextLine(alias TR)(ref string input, ref Node dst, ref Location loc, bool translate = true)
+private void parseTextLine(alias TR, bool translate = true)(ref string input, ref Node dst, ref Location loc)
 {
 	import std.algorithm.comparison : among;
 
@@ -1215,7 +1215,7 @@ private void parseTextLine(alias TR)(ref string input, ref Node dst, ref Locatio
 		input = input[idx .. $];
 		dst.translationKey ~= kln;
 		auto tln = TR(kln);
-		parseTextLine!TR(tln, dst, loccopy, false);
+		parseTextLine!(TR, false)(tln, dst, loccopy);
 		return;
 	}
 
