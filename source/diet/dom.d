@@ -35,6 +35,13 @@ string expectExpression(const(Attribute) att)
 	return att.contents[0].value;
 }
 
+Node[] clone(in Node[] nodes)
+{
+	auto ret = new Node[](nodes.length);
+	foreach (i, ref n; ret) n = nodes[i].clone;
+	return ret;
+}
+
 bool isExpression(const(Attribute) att) { return att.contents.length == 1 && att.contents[0].kind == AttributeContent.Kind.interpolation; }
 bool isText(const(Attribute) att) { return att.contents.length == 0 || att.contents.length == 1 && att.contents[0].kind == AttributeContent.Kind.text; }
 
@@ -134,6 +141,16 @@ NodeContent[] toNodeContent(in AttributeContent[] contents, Location loc)
 	@property inout(Attribute) id() inout { return getAttribute("id"); }
 	/// Returns "class" attribute - a white space separated list of style class identifiers.
 	@property inout(Attribute) class_() inout { return getAttribute("class"); }
+
+	Node clone()
+	const {
+		auto ret = new Node(this.loc, this.name, null, null, this.attribs, this.translationKey);
+		ret.attributes.length = this.attributes.length;
+		foreach (i, ref a; ret.attributes) a = this.attributes[i].dup;
+		ret.contents.length = this.contents.length;
+		foreach (i, ref c; ret.contents) c = this.contents[i].clone;
+		return ret;
+	}
 
 	/** Adds a piece of text to the node's contents.
 
@@ -375,6 +392,16 @@ struct NodeContent {
 	static NodeContent interpolation(string text, Location loc) { return NodeContent(Kind.interpolation, loc, Node.init, text); }
 	/// Creates a new raw string interpolation node content value.
 	static NodeContent rawInterpolation(string text, Location loc) { return NodeContent(Kind.rawInterpolation, loc, Node.init, text); }
+
+	@property NodeContent clone()
+	const {
+		NodeContent ret;
+		ret.kind = this.kind;
+		ret.loc = this.loc;
+		ret.value = this.value;
+		if (this.node) ret.node = this.node.clone;
+		return ret;
+	}
 
 	/// Compares node content for equality.
 	bool opEquals(in ref NodeContent other)
