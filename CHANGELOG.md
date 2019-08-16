@@ -1,6 +1,24 @@
 Changelog
 =========
 
+v1.6.0 - 2019-08-16
+-------------------
+
+- Adds the new "extension includes" feature, combining blocks/extensions with includes - [pull #64][issue64]
+- Adds `Node.clone` and `NodeContent.clone` for recursive DOM cloning - [pull #64][issue64]
+- Updates compiler support to DMD 2.082.1 up to 2.087.1 and LDC 1.12.0 up to 1.16.0 - [pull #64][issue64]
+
+[issue64]: https://github.com/rejectedsoftware/diet-ng/issues/64
+
+
+v1.5.0 - 2018-06-10
+-------------------
+
+- Adds `Node.translationKey` to allow external code to access the original translation key for translated nodes - [pull #55][issue55]
+
+[issue55]: https://github.com/rejectedsoftware/diet-ng/issues/55
+
+
 v1.4.5 - 2018-03-12
 -------------------
 
