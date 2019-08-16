@@ -511,8 +511,8 @@ unittest { // includes
 	testFail("include main", "Dependency cycle detected for this module.");
 	testFail("include inc2", "Missing include input file: inc2");
 	testFail("include #{p}", "Dynamic includes are not supported.");
-	testFail("include inc\n\tp", "Includes cannot have children.");
-	testFail("p\ninclude inc\n\tp", "Includes cannot have children.");
+	testFail("include inc\n\tp", "Only 'block' allowed as children of includes.");
+	testFail("p\ninclude inc\n\tp", "Only 'block' allowed as children of includes.");
 }
 
 unittest { // extensions
@@ -589,6 +589,36 @@ unittest { // extensions
 		new Node(Location("main.dt", 2), "p", null, null)
 	]);
 }
+
+unittest { // include extensions
+	Node[] parse(string diet) {
+		auto files = [
+			InputFile("main.dt", diet),
+			InputFile("root.dt", "p\n\tblock a"),
+		];
+		return parseDiet(files).nodes;
+	}
+
+	assert(parse("body\n\tinclude root\n\t\tblock a\n\t\t\tem") == [
+		new Node(Location("main.dt", 0), "body", null, [
+			NodeContent.tag(new Node(Location("root.dt", 0), "p", null, [
+				NodeContent.tag(new Node(Location("main.dt", 3), "em", null, null))
+			]))
+		])
+	]);
+
+	assert(parse("body\n\tinclude root\n\t\tblock a\n\t\t\tem\n\tinclude root\n\t\tblock a\n\t\t\tstrong") == [
+		new Node(Location("main.dt", 0), "body", null, [
+			NodeContent.tag(new Node(Location("root.dt", 0), "p", null, [
+				NodeContent.tag(new Node(Location("main.dt", 3), "em", null, null))
+			])),
+			NodeContent.tag(new Node(Location("root.dt", 0), "p", null, [
+				NodeContent.tag(new Node(Location("main.dt", 6), "strong", null, null))
+			]))
+		])
+	]);
+}
+
 
 unittest { // test CTFE-ability
 	static const result = parseDiet("foo#id.cls(att=\"val\", att2=1+3, att3='test#{4}it')\n\tbar");
@@ -693,7 +723,7 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref 
 	auto floc = Location(files[file_index].name, 0);
 	enforcep(!import_stack.canFind(file_index), "Dependency cycle detected for this module.", floc);
 
-	auto nodes = files[file_index].nodes;
+	Node[] nodes = files[file_index].nodes;
 	if (!nodes.length) return null;
 
 	if (nodes[0].name == "extends") {
@@ -724,8 +754,14 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref 
 			blocks ~= BlockInfo(name, mode, contents);
 		}
 
+		// save the original file contents for a possible later parsing as part of an
+		// extension include directive (blocks are replaced in-place as part of the parsing
+		// process)
+		auto new_files = files.dup;
+		new_files[base_idx].nodes = clone(new_files[base_idx].nodes);
+
 		// parse base template
-		return parseDietWithExtensions(files, base_idx, blocks, import_stack ~ file_index);
+		return parseDietWithExtensions(new_files, base_idx, blocks, import_stack ~ file_index);
 	}
 
 	static string extractFilename(Node n)
@@ -777,12 +813,31 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref 
 			if (ret.isNull) ret = [];
 		} else if (n.name == "include") {
 			auto name = extractFilename(n);
-			enforcep(n.contents.length == 1, "Includes cannot have children.", n.loc);
 			auto fidx = files.countUntil!(f => matchesName(f.name, name, files[file_index].name));
 			enforcep(fidx >= 0, "Missing include input file: "~name, n.loc);
-			insert(parseDietWithExtensions(files, fidx, blocks, import_stack ~ file_index));
+
+			if (n.contents.length > 1) {
+				auto dummy = new Node(n.loc, "extends");
+				dummy.addText(name, n.contents[0].loc);
+
+				Node[] children = [dummy];
+
+				foreach (nc; n.contents[1 .. $]) {
+					enforcep(nc.node !is null && nc.node.name == "block",
+						"Only 'block' allowed as children of includes.", nc.loc);
+					children ~= nc.node;
+				}
+
+				import std.path : extension;
+				auto dummyfil = FileInfo("include"~extension(files[file_index].name), children);
+
+				BlockInfo[] sub_blocks;
+				insert(parseDietWithExtensions(files ~ dummyfil, files.length, sub_blocks, import_stack));
+			} else {
+				insert(parseDietWithExtensions(files, fidx, blocks, import_stack ~ file_index));
+			}
 		} else {
-			n.contents.modifyArray!((nc) {
+			n.contents = n.contents.mapJoin!((nc) {
 				Nullable!(NodeContent[]) rn;
 				if (nc.kind == NodeContent.Kind.node) {
 					auto mod = processNode(nc.node);
@@ -798,7 +853,7 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref 
 		return ret;
 	}
 
-	nodes.modifyArray!(processNode);
+	nodes = nodes.mapJoin!(processNode);
 
 	assert(nodes.all!(n => n.name != "block"));
 
@@ -1148,7 +1203,7 @@ private bool parseTag(ref string input, ref size_t idx, ref Node dst, ref bool h
 	If there a a newline at the end, it will be appended to the contents of the
 	destination node.
 */
-private void parseTextLine(alias TR)(ref string input, ref Node dst, ref Location loc, bool translate = true)
+private void parseTextLine(alias TR, bool translate = true)(ref string input, ref Node dst, ref Location loc)
 {
 	import std.algorithm.comparison : among;
 
@@ -1160,7 +1215,7 @@ private void parseTextLine(alias TR)(ref string input, ref Node dst, ref Locatio
 		input = input[idx .. $];
 		dst.translationKey ~= kln;
 		auto tln = TR(kln);
-		parseTextLine!TR(tln, dst, loccopy, false);
+		parseTextLine!(TR, false)(tln, dst, loccopy);
 		return;
 	}
 
@@ -1542,15 +1597,21 @@ private bool matchesName(string filename, string logical_name, string parent_nam
 	return false;
 }
 
-private void modifyArray(alias modify, T)(ref T[] arr)
+private T[] mapJoin(alias modify, T)(T[] arr)
 {
-	size_t i = 0;
-	while (i < arr.length) {
+	T[] ret;
+	size_t start = 0;
+	foreach (i; 0 .. arr.length) {
 		auto mod = modify(arr[i]);
-		if (mod.isNull()) i++;
-		else {
-			arr = arr[0 .. i] ~ mod.get() ~ arr[i+1 .. $];
-			i += mod.length;
+		if (!mod.isNull()) {
+			ret ~= arr[start .. i] ~ mod.get();
+			start = i + 1;
 		}
 	}
+
+	if (start == 0) return arr;
+
+	ret ~= arr[start .. $];
+
+	return ret;
 }
