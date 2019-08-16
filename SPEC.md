@@ -335,6 +335,51 @@ Blocks and Extensions
 **TODO!**
 
 
+Extension Includes
+------------------
+
+Included templates can optionally be used as an extension base with its blocks
+being defined through the child nodes of the `include` tag. The extension logic
+is the same as for blocks and extensions, except that the control flow is
+reversed and base templates can serve as reusable components.
+
+Example:
+
+	// section.dt
+	h1
+		block title
+	block contents
+
+	// main.dt
+	doctype html
+	head
+		title Include extensions
+	body
+		include section.dt
+			block title
+				| First section
+			block contents
+				p These are the contents of the first section.
+		include section.dt
+			block title
+				| Second section
+			block contents
+				p These are the contents of the second section.
+
+Outputs:
+
+	<!DOCTYPE html>
+	<head>
+		<title>Include extensions</title>
+	</head>
+	<body>
+		<h1>First section</h1>
+		<p>These are the contents of the first section.</p>
+		<h1>Second section</h1>
+		<p>These are the contents of the second section.</p>
+	</body>
+
+
 HTML-specific Features
 ----------------------
 
