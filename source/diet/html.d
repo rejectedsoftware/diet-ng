@@ -20,7 +20,6 @@ import diet.traits;
 		ALIASES = A list of variables to make available inside of the template,
 			as well as traits structs annotated with the `@dietTraits`
 			attribute.
-		dst = The output range to write the generated HTML to.
 
 	Traits:
 		In addition to the default Diet traits, adding an enum field
@@ -176,9 +175,10 @@ template compileHTMLDietStrings(alias FILES_GROUP, ALIASES...)
 /** Returns a mixin string that generates HTML for the given DOM tree.
 
 	Params:
-		nodes = The root nodes of the DOM tree
+		doc = The root nodes of the DOM tree.
 		range_name = Optional custom name to use for the output range, defaults
 			to `_diet_output`.
+		style = Output style to use.
 
 	Returns:
 		A string of D statements suitable to be mixed in inside of a function.
