@@ -56,6 +56,7 @@ Document parseDiet(alias TR = identity)(string text, string filename = "string")
 	return parseDiet!TR(f);
 }
 
+/// Ditto
 Document parseDiet(alias TR = identity)(InputFile[] files)
 	if (is(typeof(TR(string.init)) == string))
 {
