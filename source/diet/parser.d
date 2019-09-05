@@ -785,8 +785,8 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref 
 				auto np = processNode(n);
 				if (!np.isNull()) {
 					if (ret.isNull) ret = nodes[0 .. i];
-					ret ~= np;
-				} else if (!ret.isNull) ret ~= n;
+					ret.get ~= np;
+				} else if (!ret.isNull) ret.get ~= n;
 			}
 			if (ret.isNull && nodes.length) ret = nodes;
 		}
@@ -842,7 +842,7 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref 
 				Nullable!(NodeContent[]) rn;
 				if (nc.kind == NodeContent.Kind.node) {
 					auto mod = processNode(nc.node);
-					if (!mod.isNull()) rn = mod.map!(n => NodeContent.tag(n)).array;
+					if (!mod.isNull()) rn = mod.get.map!(n => NodeContent.tag(n)).array;
 				}
 				assert(rn.isNull || rn.get.all!(n => n.node.name != "block"));
 				return rn;
