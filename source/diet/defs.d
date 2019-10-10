@@ -27,7 +27,7 @@ alias DietParserException = Exception;
 		Throws a `DietParserException` when called with a `false` condition at
 		run time.
 */
-void enforcep(bool cond, lazy string text, in ref Location loc)
+void enforcep(bool cond, lazy string text, in ref Location loc) @safe
 {
 	if (__ctfe) {
 		import std.conv : to;

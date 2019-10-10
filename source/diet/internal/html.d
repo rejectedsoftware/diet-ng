@@ -241,6 +241,7 @@ unittest { // issue #36
 
 private struct StringAppender {
 	string data;
+	@safe:
 	void put(string s) { data ~= s; }
 	void put(char ch) { data ~= ch; }
 	void put(dchar ch) {
