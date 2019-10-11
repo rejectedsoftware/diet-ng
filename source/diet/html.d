@@ -327,6 +327,7 @@ string getHTMLLiveMixin(in Document doc, string range_name = dietOutputRangeName
 	ctx.piecesMapName = htmlPiecesMapName;
 	string ret = "import diet.internal.html : htmlEscape, htmlAttribEscape, filterHTMLAttribEscape;\n";
 	ret ~= "import std.format : formattedWrite;\n";
+	ret ~= "import std.range : put;\n";
 	foreach(i, n; doc.nodes)
 		ret ~= ctx.getHTMLMixin(n, false);
 	// output a final html in case there were any items at the end
@@ -677,11 +678,39 @@ private struct CTX {
 	int depth = 0;
 	string rangeName;
 	string piecesMapName;
+	char[] piecesMapOutputStr;
 	size_t currentStatement;
 	bool inRawText = false;
 	NewlineState newlineState = NewlineState.none;
 	bool anyText;
 	int suppressLive;
+
+	// trying to cut down on compile time memory, this should help by not formatting very similar lines.
+	pure @safe const(char)[] getHTMLPiece()
+	{
+		if(!piecesMapOutputStr.length)
+		{
+			piecesMapOutputStr = "put(" ~ rangeName ~ ", " ~ piecesMapName ~ "[0x00000000]);\n".dup;
+		}
+
+		// The last characters of the string are "[0x00000000]);\n". We can
+		// replace the 0s with hex characters representing the bytes of the
+		// index. Since we are always increasing the index, there's no need to
+		// keep replacing 0s once the index is out of data
+		size_t idx = piecesMapOutputStr.length - 5;
+		size_t curIdx = currentStatement;
+		while(curIdx)
+		{
+			immutable n = curIdx & 0x0f;
+			if(n > 9)
+				piecesMapOutputStr[idx] = 'a' + n - 10;
+			else
+				piecesMapOutputStr[idx] = '0' + n;
+			--idx;
+			curIdx >>= 4;
+		}
+		return piecesMapOutputStr;
+	}
 
 	pure string statement(ARGS...)(Location loc, string fmt, ARGS args)
 	{
@@ -707,7 +736,9 @@ private struct CTX {
 		case live:
 			// output all non-statement data until this point.
 			if(!isElse && !suppressLive)
-				ret ~= ("%s.put(%s[%s]);\n").format(this.rangeName, this.piecesMapName, this.currentStatement);
+			{
+				ret ~= getHTMLPiece();
+			}
 			// fall through
 			goto case normal;
 		case normal:
