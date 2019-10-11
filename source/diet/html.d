@@ -66,7 +66,7 @@ private string[] _getHTMLStrings(TRAITS...)(string filename, string expectedCode
 		foreach(dep; fi.dependencies)
 		{
 			SysTime curMod = chain("views/", dep).timeLastModified;
-			if(fi.modTime != curMod)
+			if(fi.modTime > curMod)
 			{
 				newer = true;
 				break;
