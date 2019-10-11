@@ -59,29 +59,36 @@ template compileHTMLDietFileString(string filename, alias contents, ALIASES...)
 	import std.conv : to;
 	enum _diet_files = collectFiles!(filename, contents);
 
-	version (DietUseCache) enum _diet_use_cache = true;
-	else enum _diet_use_cache = false;
-
-
-	ulong computeTemplateHash()
+	version (DietUseCache)
 	{
-		ulong ret = 0;
-		void hash(string s)
+		enum _diet_use_cache = true;
+		ulong computeTemplateHash()
 		{
-			foreach (char c; s) {
-				ret *= 9198984547192449281;
-				ret += c * 7576889555963512219;
+			ulong ret = 0;
+			void hash(string s)
+			{
+				foreach (char c; s) {
+					ret *= 9198984547192449281;
+					ret += c * 7576889555963512219;
+				}
 			}
+			foreach (ref f; _diet_files) {
+				hash(f.name);
+				hash(f.contents);
+			}
+			return ret;
 		}
-		foreach (ref f; _diet_files) {
-			hash(f.name);
-			hash(f.contents);
-		}
-		return ret;
+
+		enum _diet_hash = computeTemplateHash();
+		enum _diet_cache_file_name = filename~"_cached_"~_diet_hash.to!string~".d";
+	}
+	else
+	{
+		enum _diet_use_cache = false;
+		enum _diet_cache_file_name = "***INVALID***"; // not used anyway
 	}
 
-	enum _diet_hash = computeTemplateHash();
-	enum _diet_cache_file_name = "_cached_"~filename~"_"~_diet_hash.to!string~".d";
+
 
 	static if (_diet_use_cache && is(typeof(import(_diet_cache_file_name)))) {
 		pragma(msg, "Using cached Diet HTML template "~filename~"...");
