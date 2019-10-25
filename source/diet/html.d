@@ -633,9 +633,10 @@ private string getCodeMixin(ref CTX ctx, in ref Node node, bool in_pre) @safe
 	bool have_contents = node.contents.length > 1;
 	foreach (i, c; node.contents) {
 		if (i == 0 && c.kind == NodeContent.Kind.text) {
-			ret ~= ctx.statement(node.loc, "%s", c.value);
 			if(have_contents)
-				ret ~= ctx.statement(node.loc, "{");
+				ret ~= ctx.statement(node.loc, "%s\n{", c.value);
+			else
+				ret ~= ctx.statement(node.loc, "%s", c.value);
 		} else {
 			assert(c.kind == NodeContent.Kind.node);
 			ret ~= ctx.getHTMLMixin(c.node, in_pre);
@@ -724,7 +725,7 @@ private struct CTX {
 		// we must suppress html output.
 		auto nextLine = (fmt~"\n").format(args);
 		auto firstNonSpace = nextLine.splitter;
-		immutable isReturn = !firstNonSpace.empty && firstNonSpace.front == "return";
+		immutable isReturn = !firstNonSpace.empty && (firstNonSpace.front == "return" || firstNonSpace.front == "return;");
 		immutable isElse = !firstNonSpace.empty && firstNonSpace.front == "else";
 		with(OutputMode) final switch(mode)
 		{
