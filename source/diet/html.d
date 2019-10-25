@@ -57,7 +57,7 @@ template compileHTMLDietFile(string filename, ALIASES...)
 template compileHTMLDietFileString(string filename, alias contents, ALIASES...)
 {
 	import std.conv : to;
-	enum _diet_files = collectFiles!(filename, contents);
+	private static immutable _diet_files = collectFiles!(filename, contents);
 
 	version (DietUseCache)
 	{
