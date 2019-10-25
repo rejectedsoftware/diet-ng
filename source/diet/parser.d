@@ -57,7 +57,7 @@ Document parseDiet(alias TR = identity)(string text, string filename = "string")
 }
 
 /// Ditto
-Document parseDiet(alias TR = identity)(InputFile[] files)
+Document parseDiet(alias TR = identity)(const(InputFile)[] files)
 	if (is(typeof(TR(string.init)) == string))
 {
 	import diet.traits;

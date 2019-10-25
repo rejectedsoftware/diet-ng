@@ -57,7 +57,7 @@ template compileHTMLDietFile(string filename, ALIASES...)
 template compileHTMLDietFileString(string filename, alias contents, ALIASES...)
 {
 	import std.conv : to;
-	enum _diet_files = collectFiles!(filename, contents);
+	private static immutable _diet_files = collectFiles!(filename, contents);
 
 	version (DietUseCache)
 	{
@@ -501,7 +501,8 @@ private string getCodeMixin(ref CTX ctx, in ref Node node, bool in_pre)
 	bool got_code = false;
 	foreach (i, c; node.contents) {
 		if (i == 0 && c.kind == NodeContent.Kind.text) {
-			ret ~= ctx.statement(node.loc, "%s {", c.value);
+			ret ~= ctx.statement(node.loc, "%s", c.value);
+			ret ~= ctx.statement(node.loc, "{");
 			got_code = true;
 		} else {
 			assert(c.kind == NodeContent.Kind.node);
