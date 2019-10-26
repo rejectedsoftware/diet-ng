@@ -40,8 +40,6 @@ template compileHTMLDietFile(string filename, ALIASES...)
 	alias compileHTMLDietFile = compileHTMLDietFileString!(filename, _dietFileData!filename.contents, ALIASES);
 }
 
-version(DietUseCache) version(DietUseLive) static assert("Cached compilation + Live Mode not supported");
-
 version(DietUseLive)
 private string[] _getHTMLStrings(TRAITS...)(string filename, string expectedCode) @safe
 {
@@ -138,6 +136,7 @@ private template realCompileHTMLDietFileString(string filename, alias contents, 
 
 
 
+	alias TRAITS = DietTraits!ALIASES;
 	static if (_diet_use_cache && is(typeof(import(_diet_cache_file_name)))) {
 		pragma(msg, "Using cached Diet HTML template "~filename~"...");
 		enum _dietParser = import(_diet_cache_file_name);
