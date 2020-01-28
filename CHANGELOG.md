@@ -1,6 +1,21 @@
 Changelog
 =========
 
+v1.6.1 - 2019-10-25
+-------------------
+
+- Fixes the "transitional" HTML doctype string (by WebFreak) - [pull #60][issue60]
+- Compiles without deprecation warnings on DMD 2.088.0 - [pull #66][issue66]
+- Fixes the use of C++ style line comments in code lines - [issue #58][issue58], [pull #73][issue73]
+- Avoids excessive CTFE stack traces when syntax errors are encountered - [issue #69][issue69], [pull #73][issue73]
+
+[issue58]: https://github.com/rejectedsoftware/diet-ng/issues/58
+[issue60]: https://github.com/rejectedsoftware/diet-ng/issues/60
+[issue66]: https://github.com/rejectedsoftware/diet-ng/issues/66
+[issue69]: https://github.com/rejectedsoftware/diet-ng/issues/69
+[issue73]: https://github.com/rejectedsoftware/diet-ng/issues/73
+
+
 v1.6.0 - 2019-08-16
 -------------------
 
