@@ -700,7 +700,7 @@ private string parseIdent(in ref string str, ref size_t start,
 	/* We could have consumed the complete string and still have elements
 	on the stack or have ended non breakChars character.
 	*/
-	if(stack.length == 0) {
+	if(i < str.length && stack.length == 0) {
 		foreach(char it; breakChars) {
 			if(str[i] == it) {
 				size_t startC = start;
@@ -712,6 +712,14 @@ private string parseIdent(in ref string str, ref size_t start,
 	enforcep(false, "Identifier was not ended by any of these characters: "
 		~ breakChars, loc);
 	assert(false);
+}
+
+unittest { // issue #75
+	string foo = "(failure";
+	Location loc;
+	size_t pos = 1;
+	import std.exception : assertThrown;
+	assertThrown!(DietParserException)(parseIdent(foo, pos, ")", loc));
 }
 
 private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref BlockInfo[] blocks, size_t[] import_stack)
