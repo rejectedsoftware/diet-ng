@@ -41,60 +41,66 @@ template compileHTMLDietFile(string filename, ALIASES...)
 }
 
 version(DietUseLive)
-private string[] _getHTMLStrings(TRAITS...)(string filename, string expectedCode) @safe
 {
-	import std.range : chain;
-	import std.file;
-	import std.array;
-	import std.algorithm;
-	import std.string : lineSplitter;
-	import std.datetime : SysTime;
-	static struct FileInfo
+	// out here, because the FileInfo struct isn't different based on the TRAITS.
+	private struct FileInfo
 	{
+		import std.datetime : SysTime;
 		SysTime modTime;
 		string[] dependencies;
 		string[] htmlstrings;
 	}
-	static FileInfo[string] cache;
-	// assume files live in views/filename
-	if(auto fi = filename in cache)
+
+	private string[] _getHTMLStrings(TRAITS...)(string filename, string expectedCode) @safe
 	{
-		// have to check all the files, not just the main one
-		bool newer = false;
-		foreach(dep; fi.dependencies)
+		import std.range : chain;
+		import std.file;
+		import std.array;
+		import std.algorithm;
+		import std.string : lineSplitter;
+		static FileInfo[string] cache; // one per set of TRAITS.
+		// assume files live in views/filename
+		if(auto fi = filename in cache)
 		{
-			SysTime curMod = chain("views/", dep).timeLastModified;
-			if(curMod > fi.modTime)
+			// have to check all the files, not just the main one
+			bool newer = false;
+			foreach(dep; fi.dependencies)
 			{
-				newer = true;
-				break;
+				auto curMod = chain("views/", dep).timeLastModified;
+				if(curMod > fi.modTime)
+				{
+					newer = true;
+					break;
+				}
 			}
+			// already checked, return the strings
+			if(!newer)
+				return fi.htmlstrings;
 		}
-		// already checked, return the strings
-		if(!newer)
-			return fi.htmlstrings;
-	}
 
-	auto inputs = rtGetInputs(filename, "views/");
+		auto inputs = rtGetInputs(filename, "views/");
 
-	// need to process the file again
-	auto doc = applyTraits!TRAITS(parseDiet!(translate!TRAITS)(inputs));
-	auto code = getHTMLLiveMixin(doc);
-	// remove all the "#line" directives
-	if(!code.lineSplitter.filter!(l => !l.startsWith("#line")).equal(expectedCode.lineSplitter.filter!(l => !l.startsWith("#line"))))
-	{
-		throw new Exception("Recompile necessary! view file " ~ filename ~ " or dependency has changed its code");
-	}
+		// need to process the file again
+		auto doc = applyTraits!TRAITS(parseDiet!(translate!TRAITS)(inputs));
+		auto code = getHTMLLiveMixin(doc);
+		// remove all the "#line" directives and compare the code. If it doesn't
+		// match, then the code changes might affect the output, and a recompile is
+		// necessary.
+		if(!code.lineSplitter.filter!(l => !l.startsWith("#line")).equal(expectedCode.lineSplitter.filter!(l => !l.startsWith("#line"))))
+		{
+			throw new DietParserException("Recompile necessary! view file " ~ filename ~ " or dependency has changed its code");
+		}
 
-	SysTime curMod = chain("views/", inputs[0].name).timeLastModified;
-	foreach(x; inputs[1 .. $])
-	{
-		// find latest time modified
-		curMod = max(curMod, chain("views/", x.name).timeLastModified);
+		auto curMod = chain("views/", inputs[0].name).timeLastModified;
+		foreach(x; inputs[1 .. $])
+		{
+			// find latest time modified
+			curMod = max(curMod, chain("views/", x.name).timeLastModified);
+		}
+		auto newFI = FileInfo(curMod, inputs.map!(fi => fi.name).array, getHTMLRawTextOnly(doc, dietOutputRangeName, getHTMLOutputStyle!TRAITS).splitter('\0').array);
+		cache[filename] = newFI;
+		return newFI.htmlstrings;
 	}
-	auto newFI = FileInfo(curMod, inputs.map!(fi => fi.name).array, getHTMLRawTextOnly(doc, dietOutputRangeName, getHTMLOutputStyle!TRAITS).splitter('\0').array);
-	cache[filename] = newFI;
-	return newFI.htmlstrings;
 }
 
 
@@ -136,7 +142,6 @@ private template realCompileHTMLDietFileString(string filename, alias contents, 
 
 
 
-	alias TRAITS = DietTraits!ALIASES;
 	static if (_diet_use_cache && is(typeof(import(_diet_cache_file_name)))) {
 		pragma(msg, "Using cached Diet HTML template "~filename~"...");
 		enum _dietParser = import(_diet_cache_file_name);
@@ -274,6 +279,11 @@ template compileHTMLDietStrings(alias FILES_GROUP, ALIASES...)
 	}
 }
 
+// encapsulate this externally for maintenance and for testing.
+private enum _diet_imports = "import diet.internal.html : htmlEscape, htmlAttribEscape, filterHTMLAttribEscape;\n"
+	 ~ "import std.format : formattedWrite;\n"
+	 ~ "import std.range : put;\n";
+
 /** Returns a mixin string that generates HTML for the given DOM tree.
 
 	Params:
@@ -290,16 +300,28 @@ string getHTMLMixin(in Document doc, string range_name = dietOutputRangeName, HT
 	CTX ctx;
 	ctx.pretty = style == HTMLOutputStyle.pretty;
 	ctx.rangeName = range_name;
-	string ret = "import diet.internal.html : htmlEscape, htmlAttribEscape, filterHTMLAttribEscape;\n";
-	ret ~= "import std.format : formattedWrite;\n";
+	string ret = _diet_imports;
 	foreach (i, n; doc.nodes)
 		ret ~= ctx.getHTMLMixin(n, false);
 	ret ~= ctx.flushRawText();
 	return ret;
 }
 
-/**
-  This returns only the NON-code portions of the diet template. The return value is a concatenated string with each string of HTML code separated by a null character. To extract the strings to send into the live renderer, split the string based on a null character.
+/** This is like getHTMLMixin, but returns only the NON-code portions of the diet
+	template. The usage is for the DietLiveMode, which can update the HTML
+	portions of the diet template at runtime without requiring a recompile.
+
+
+	Params:
+		doc = The root nodes of the DOM tree.
+		range_name = Optional custom name to use for the output range, defaults
+			to `_diet_output`.
+		style = Output style to use.
+
+	Returns:
+		The return value is a concatenated string with each string of raw
+		HTML text separated by a null character. To extract the strings to send
+		into the live renderer, split the string based on a null character.
   */
 string getHTMLRawTextOnly(in Document doc, string range_name = dietOutputRangeName, HTMLOutputStyle style = HTMLOutputStyle.compact) @safe
 {
@@ -324,9 +346,7 @@ string getHTMLLiveMixin(in Document doc, string range_name = dietOutputRangeName
 	ctx.mode = CTX.OutputMode.live;
 	ctx.rangeName = range_name;
 	ctx.piecesMapName = htmlPiecesMapName;
-	string ret = "import diet.internal.html : htmlEscape, htmlAttribEscape, filterHTMLAttribEscape;\n";
-	ret ~= "import std.format : formattedWrite;\n";
-	ret ~= "import std.range : put;\n";
+	string ret = _diet_imports;
 	foreach(i, n; doc.nodes)
 		ret ~= ctx.getHTMLMixin(n, false);
 	// output a final html in case there were any items at the end
@@ -337,12 +357,24 @@ string getHTMLLiveMixin(in Document doc, string range_name = dietOutputRangeName
 unittest {
 	import diet.parser;
 	void test(string src)(string expected) {
-		import std.array : appender;
+		import std.array : appender, array;
+		import std.algorithm : splitter;
 		static const n = parseDiet(src);
-		auto _diet_output = appender!string();
-		//pragma(msg, getHTMLMixin(n));
-		mixin(getHTMLMixin(n));
-		assert(_diet_output.data == expected, _diet_output.data);
+		{
+			auto _diet_output = appender!string();
+			//pragma(msg, getHTMLMixin(n));
+			mixin(getHTMLMixin(n));
+			assert(_diet_output.data == expected, _diet_output.data);
+		}
+
+		// test live mode.
+		{
+			// generate the strings
+			auto _diet_output = appender!string();
+			auto _diet_html_strings = getHTMLRawTextOnly(n).splitter('\0').array;
+			mixin(getHTMLLiveMixin(n));
+			assert(_diet_output.data == expected, _diet_output.data);
+		}
 	}
 
 	test!"doctype html\nfoo(test=true)"("<!DOCTYPE html><foo test></foo>");
@@ -718,10 +750,28 @@ private struct CTX {
 		import std.algorithm : splitter;
 		string ret = flushRawText();
 
-		// The only statement in the D language that is context sensitive is
-		// "else". If we see the statement begins with some number of spaces,
-		// "else", and then some other number of spaces (or end of line), then
-		// we must suppress html output.
+		// Notes on live mode here. This is about to output a statement in D
+		// code from the diet template. In live mode, this means we need to
+		// output any HTML text before outputting the D line. Because we don't
+		// know if someone might add HTML output where there currently isn't
+		// any, we always output another string from the table even though it
+		// might be empty.
+		//
+		// There are 2 cases where the code avoids doing this. The first is
+		// between an `if` an `else` statement. D does not allow this in the
+		// grammar (and it wouldn't make sense anyway). It is technically
+		// possible to add HTML in the diet file between these two, but it will
+		// not compile anyway.
+		//
+		// The second case is after a return statement. This one is tricky
+		// because we need to suppress it on the closing brace. In practice,
+		// the return statement will not have an HTML or any other statement
+		// printout (or it will fail to compile), so a flag is stored that
+		// indicates the next statement should suppress "possible" HTML output.
+		//
+		// At this time, the code just does a simple match to the keywords
+		// `return` or `else` as the first word of the line. This should be
+		// good enough, but may not be sufficient in all cases.
 		auto nextLine = (fmt~"\n").format(args);
 		auto firstNonSpace = nextLine.splitter;
 		immutable isReturn = !firstNonSpace.empty && (firstNonSpace.front == "return" || firstNonSpace.front == "return;");
@@ -755,7 +805,7 @@ private struct CTX {
 		}
 		if(isReturn)
 		{
-			// need to skip next output
+			// need to skip next HTML output
 			suppressLive = 1;
 		}
 
@@ -781,7 +831,7 @@ private struct CTX {
 				// do nothing
 				break;
 			case normal:
-				ret = this.rangeName ~ ".put(\"";
+				ret = "put(" ~ this.rangeName ~ ", \"";
 				break;
 			}
 			this.inRawText = true;
@@ -796,6 +846,9 @@ private struct CTX {
 			ret ~= dstringEscape(text);
 			break;
 		case rawTextOnly:
+			// this is the raw string being output to the browser, indexed in
+			// an array. Since it's not being mixed in, we do not need to
+			// escape.
 			ret ~= text;
 			break;
 		}
