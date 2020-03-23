@@ -393,6 +393,62 @@ unittest {
 	test!"#foo"("<div id=\"foo\"></div>");
 }
 
+// test live mode works with HTML changes
+unittest {
+	void test(string before, string after)(string expectedBefore, string expectedAfter) {
+		import std.array : appender, array;
+		import std.algorithm : splitter, equal, filter, startsWith;
+		import std.string : lineSplitter;
+		static const bef = parseDiet(before);
+		static const aft = parseDiet(after);
+
+		enum _codeBefore = getHTMLLiveMixin(bef);
+		enum _codeAfter = getHTMLLiveMixin(aft);
+
+		// ensure both items produce the same code
+		assert(      _codeBefore.lineSplitter.filter!(l => !l.startsWith("#line"))
+			   .equal(_codeAfter.lineSplitter.filter!(l => !l.startsWith("#line"))));
+
+
+		// test both sets of code with both strings
+		auto _diet_html_strings = getHTMLRawTextOnly(bef).splitter('\0').array;
+		{
+			auto _diet_output = appender!string();
+			mixin(_codeBefore);
+			assert(_diet_output.data == expectedBefore, _diet_output.data);
+		}
+		{
+			auto _diet_output = appender!string();
+			mixin(_codeAfter);
+			assert(_diet_output.data == expectedBefore, _diet_output.data);
+		}
+
+		// second set of strings
+		_diet_html_strings = getHTMLRawTextOnly(aft).splitter('\0').array;
+		{
+			auto _diet_output = appender!string();
+			mixin(_codeBefore);
+			assert(_diet_output.data == expectedAfter, _diet_output.data);
+		}
+		{
+			auto _diet_output = appender!string();
+			mixin(_codeAfter);
+			assert(_diet_output.data == expectedAfter, _diet_output.data);
+		}
+	}
+
+	// test renaming things
+	test!("foo(test=2+3)",
+		  "foobar(testbaz=2+3)")
+		("<foo test=\"5\"></foo>",
+		 "<foobar testbaz=\"5\"></foobar>");
+
+	// test injecting extra html
+	test!("- if(true)\n  - auto x = 5;\n  foo #{x}",
+	      "- if(true)\n  a(href=\"injected!\") injected html!\n  - auto x = 5;\n  foo #{x}",
+		  )("<foo>5</foo>", "<a href=\"injected!\">injected html!</a><foo>5</foo>");
+}
+
 
 /** Determines how the generated HTML gets styled.
 
@@ -507,22 +563,25 @@ private string getElementMixin(ref CTX ctx, in Node node, bool in_pre) @safe
 				continue;
 			}
 
+			// note the attribute name is HTML, and not code, so live mode
+			// should reprocess that and use the string table.
 			ret ~= ctx.statement(node.loc, q{
 				static if (is(typeof(() { return %s; }()) == bool) )
 			}~'{', expr);
+				ret ~= ctx.statementCont(node.loc, q{if (%s)}, expr);
 				if (ctx.isHTML5)
-					ret ~= ctx.statement(node.loc, q{if (%s) %s.put(" %s");}, expr, ctx.rangeName, att.name);
+					ret ~= ctx.rawText(node.loc, " "~att.name);
 				else
-					ret ~= ctx.statement(node.loc, q{if (%s) %s.put(" %s=\"%s\"");}, expr, ctx.rangeName, att.name, att.name);
+					ret ~= ctx.rawText(node.loc, " "~att.name~"=\""~att.name~"\"");
 
 				ret ~= ctx.statement(node.loc, "} else "~q{static if (is(typeof(%s) : const(char)[])) }~"{{", expr);
-				ret ~= ctx.statement(node.loc, q{  auto _diet_val = %s;}, expr);
-				ret ~= ctx.statement(node.loc, q{  if (_diet_val !is null) }~'{');
+				ret ~= ctx.statementCont(node.loc, q{  auto _diet_val = %s;}, expr);
+				ret ~= ctx.statementCont(node.loc, q{  if (_diet_val !is null) }~'{');
 					ret ~= ctx.rawText(node.loc, " "~att.name~"=\"");
 					ret ~= ctx.statement(node.loc, q{    %s.filterHTMLAttribEscape(_diet_val);}, ctx.rangeName);
 					ret ~= ctx.rawText(node.loc, "\"");
 				ret ~= ctx.statement(node.loc, "  }");
-			ret ~= ctx.statement(node.loc, "}} else {");
+			ret ~= ctx.statementCont(node.loc, "}} else {");
 		}
 
 		ret ~= ctx.rawText(node.loc, " "~att.name ~ "=\"");
@@ -742,6 +801,22 @@ private struct CTX {
 			curIdx >>= 4;
 		}
 		return piecesMapOutputStr;
+	}
+
+	// same as statement, but with guaranteed no raw text between the last
+	// statement and it.
+	pure string statementCont(ARGS...)(Location loc, string fmt, ARGS args)
+	{
+		import std.string : format;
+		with(OutputMode) final switch(mode)
+		{
+		case live:
+		case normal:
+			return ("#line %s \"%s\"\n"~fmt~"\n").format(loc.line+1, loc.file, args);
+		case rawTextOnly:
+			// do not output anything here, no raw text is possible
+			return "";
+		}
 	}
 
 	pure string statement(ARGS...)(Location loc, string fmt, ARGS args)
