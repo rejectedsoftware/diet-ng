@@ -9,6 +9,7 @@ module diet.dom;
 
 import diet.internal.string;
 
+@safe:
 
 string expectText(const(Attribute) att)
 {

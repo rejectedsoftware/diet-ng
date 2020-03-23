@@ -6,6 +6,8 @@ module diet.input;
 
 import diet.traits : DietTraitsAttribute;
 
+@safe:
+
 
 /** Converts a `Group` with alternating file names and contents to an array of
 	`InputFile`s.
@@ -124,4 +126,56 @@ private InputFile[] merge(InputFile[] a, InputFile[] b)
 		if (!a.canFind!(g => g.name == f.name))
 			ret ~= f;
 	return ret;
+}
+
+/**
+  Runtime equivalent of collectFiles. This version uses std.file to read files
+  from the appropriate directory. Note that for collectFiles, the directory to
+  use is passed on the command line, whereas in this case, we must receive the
+  directory containing the files from the caller.
+
+  Params:
+		file = The root file that will be used to find all referenced files.
+		baseDir = Optional base directory from which all files will be searched.
+
+  Returns:
+		An array of InputFile structs containing the list of files that are
+		referenced from the root file, and their contents.
+*/
+InputFile[] rtGetInputs(string file, string baseDir = "")
+{
+	// for each of the files, import the file, get all the references, and
+	// continually import files until we have them all.
+	import std.range;
+	import std.file : readText, exists;
+	import diet.internal.string : stripUTF8BOM;
+	import std.algorithm : canFind;
+	import std.path : extension;
+	auto ext = extension(file);
+	string[] filesToProcess = [file];
+	InputFile[] result;
+	void addFile(string fname)
+	{
+		if(!filesToProcess.canFind(fname) && !result.canFind!(g => g.name == fname))
+			filesToProcess ~= fname;
+	}
+	while(filesToProcess.length)
+	{
+		auto nextFile = filesToProcess.front;
+		filesToProcess.popFront;
+		if(!exists(chain(baseDir, nextFile)))
+		{
+			if(!exists(chain(baseDir, nextFile, ext)))
+				throw new Exception("Cannot find necessary file " ~ nextFile ~ " to parse strings for " ~ file);
+			addFile(nextFile ~ ext);
+			continue;
+		}
+		auto newInput = InputFile(nextFile, stripUTF8BOM(readText(chain(baseDir, nextFile))));
+		result ~= newInput;
+		foreach(f; collectReferences(newInput.contents))
+		{
+			addFile(f);
+		}
+	}
+	return result;
 }

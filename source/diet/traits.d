@@ -28,10 +28,11 @@ import diet.dom;
 		    the output style of the generated HTML, e.g. compact or pretty)
 	)
 */
-@property DietTraitsAttribute dietTraits() { return DietTraitsAttribute.init; }
+
+@property DietTraitsAttribute dietTraits() @safe { return DietTraitsAttribute.init; }
 
 ///
-unittest {
+@safe unittest {
 	import diet.html : compileHTMLDietString;
 	import std.array : appender, array;
 	import std.string : toUpper;
@@ -172,7 +173,7 @@ void filter(ALIASES...)(in char[] input, string filter, CharacterSink output)
 	throw new Exception("Unknown filter: "~filter);
 }
 
-private string generateFilterChainMixin(string[] chain, NodeContent[] contents)
+private string generateFilterChainMixin(string[] chain, NodeContent[] contents) @safe
 {
 	import std.format : format;
 	import diet.defs : enforcep, dietOutputRangeName;
@@ -218,7 +219,7 @@ private string generateFilterChainMixin(string[] chain, NodeContent[] contents)
 	return ret ~ `}`;
 }
 
-unittest {
+@safe unittest {
 	import std.array : appender;
 	import diet.html : compileHTMLDietString;
 

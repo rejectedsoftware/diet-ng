@@ -1,3 +1,14 @@
 name "htmlserver"
 dependency "diet-ng" path="../.."
 dependency "vibe-d" version="~>0.8.5"
+configuration "application" {
+    targetType "executable"
+}
+configuration "dietLive" {
+    targetType "executable"
+    versions "DietUseLive"
+}
+configuration "dietCache" {
+    targetType "executable"
+    versions "DietUseCache"
+}
