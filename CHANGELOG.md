@@ -1,6 +1,16 @@
 Changelog
 =========
 
+v1.7.1 - 2020-03-24
+-------------------
+
+- Fixed an issue where the translation callback had to be marked `@safe` - [pull #80][issue80]
+- Updates the Meson version number of the package - [issue #79][issue79], [pull #80][issue80]
+
+[issue79]: https://github.com/rejectedsoftware/diet-ng/issues/79
+[issue80]: https://github.com/rejectedsoftware/diet-ng/issues/80
+
+
 v1.7.0 - 2020-03-24
 -------------------
 
