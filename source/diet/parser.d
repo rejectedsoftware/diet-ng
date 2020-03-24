@@ -35,8 +35,6 @@ version(unittest)
 	bool nodeEq(Node[] arr1, Node[] arr2) @trusted { return arr1 == arr2; }
 }
 
-// everything in here should be safe
-@safe:
 
 /** Parses a Diet template document and outputs the resulting DOM tree.
 
@@ -78,8 +76,8 @@ Document parseDiet(alias TR = identity)(const(InputFile)[] files)
 	return new Document(parseDietWithExtensions(parsed_files, 0, blocks, null));
 }
 
-unittest { // test basic functionality
-	Location ln(int l) { return Location("string", l); }
+@safe unittest { // test basic functionality
+	Location ln(int l) @safe { return Location("string", l); }
 
 	// simple node
 	assert(parseDiet("test").nodes.nodeEq([
@@ -337,7 +335,7 @@ unittest { // test basic functionality
 	]));
 }
 
-unittest {
+@safe unittest {
 	Location ln(int l) { return Location("string", l); }
 
 	// angular2 html attributes tests
@@ -444,7 +442,7 @@ unittest {
 	]));
 }
 
-unittest { // translation
+@safe unittest { // translation
 	import std.string : toUpper;
 
 	static Location ln(int l) { return Location("string", l); }
@@ -477,7 +475,7 @@ unittest { // translation
 	]));
 }
 
-unittest { // test expected errors
+@safe unittest { // test expected errors
 	void testFail(string diet, string msg)
 	{
 		try {
@@ -497,7 +495,7 @@ unittest { // test expected errors
 	testFail("a#foo#bar", "Only one \"id\" definition using '#' is allowed.");
 }
 
-unittest { // includes
+@safe unittest { // includes
 	Node[] parse(string diet) {
 		auto files = [
 			InputFile("main.dt", diet),
@@ -526,7 +524,7 @@ unittest { // includes
 	testFail("p\ninclude inc\n\tp", "Only 'block' allowed as children of includes.");
 }
 
-unittest { // extensions
+@safe unittest { // extensions
 	Node[] parse(string diet) {
 		auto files = [
 			InputFile("main.dt", diet),
@@ -601,7 +599,7 @@ unittest { // extensions
 	]));
 }
 
-unittest { // include extensions
+@safe unittest { // include extensions
 	Node[] parse(string diet) {
 		auto files = [
 			InputFile("main.dt", diet),
@@ -631,12 +629,12 @@ unittest { // include extensions
 }
 
 
-unittest { // test CTFE-ability
+@safe unittest { // test CTFE-ability
 	static const result = parseDiet("foo#id.cls(att=\"val\", att2=1+3, att3='test#{4}it')\n\tbar");
 	static assert(result.nodes.length == 1);
 }
 
-unittest { // regression tests
+@safe unittest { // regression tests
 	Location ln(int l) { return Location("string", l); }
 
 	// last line contains only whitespace
@@ -645,7 +643,7 @@ unittest { // regression tests
 	]));
 }
 
-unittest { // issue #14 - blocks in includes
+@safe unittest { // issue #14 - blocks in includes
 	auto files = [
 		InputFile("main.dt", "extends layout\nblock nav\n\tbaz"),
 		InputFile("layout.dt", "foo\ninclude inc"),
@@ -658,7 +656,7 @@ unittest { // issue #14 - blocks in includes
 	]));
 }
 
-unittest { // issue #32 - numeric id/class
+@safe unittest { // issue #32 - numeric id/class
 	Location ln(int l) { return Location("string", l); }
 	assert(parseDiet("foo.01#02").nodes.nodeEq([
 		new Node(ln(0), "foo", [
@@ -676,7 +674,7 @@ string identity(string str) nothrow @safe @nogc { return str; }
 
 private string parseIdent(in ref string str, ref size_t start,
 	   	string breakChars, in ref Location loc)
-{
+@safe {
 	import std.array : back;
 	/* The stack is used to keep track of opening and
 	closing character pairs, so that when we hit a break char of
@@ -724,7 +722,7 @@ private string parseIdent(in ref string str, ref size_t start,
 	assert(false);
 }
 
-unittest { // issue #75
+@safe unittest { // issue #75
 	string foo = "(failure";
 	Location loc;
 	size_t pos = 1;
@@ -733,7 +731,7 @@ unittest { // issue #75
 }
 
 private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref BlockInfo[] blocks, size_t[] import_stack)
-{
+@safe {
 	import std.algorithm : all, any, canFind, countUntil, filter, find, map;
 	import std.array : array;
 	import std.path : stripExtension;
@@ -1121,7 +1119,7 @@ private Node parseTagLine(alias TR)(ref string input, ref Location loc, out bool
 }
 
 private bool parseTag(ref string input, ref size_t idx, ref Node dst, ref bool has_nested, ref Location loc)
-{
+@safe {
 	import std.ascii : isWhite;
 
 	dst.name = skipIdent(input, idx, ":-_", loc, true);
@@ -1226,7 +1224,7 @@ private void parseTextLine(alias TR, bool translate = true)(ref string input, re
 {
 	import std.algorithm.comparison : among;
 
-	size_t sidx = 0, idx = 0;
+	size_t idx = 0;
 
 	if (translate && dst.attribs & NodeAttribs.translated) {
 		Location loccopy = loc;
@@ -1234,12 +1232,21 @@ private void parseTextLine(alias TR, bool translate = true)(ref string input, re
 		input = input[idx .. $];
 		dst.translationKey ~= kln;
 		auto tln = TR(kln);
-		parseTextLine!(TR, false)(tln, dst, loccopy);
+		parseTextLineRaw(tln, dst, loccopy);
 		return;
 	}
 
+	parseTextLineRaw(input, dst, loc);
+}
+
+private void parseTextLineRaw(ref string input, ref Node dst, ref Location loc)
+@safe {
+	import std.algorithm.comparison : among;
+
+	size_t sidx = 0, idx = 0;
+
 	void flushText()
-	{
+	@safe {
 		if (idx > sidx) dst.addText(input[sidx .. idx], loc);
 	}
 
@@ -1301,7 +1308,7 @@ private void parseTextLine(alias TR, bool translate = true)(ref string input, re
 }
 
 private string skipLine(ref string input, ref size_t idx, ref Location loc)
-{
+@safe {
 	auto sidx = idx;
 
 	while (idx < input.length) {
@@ -1326,7 +1333,7 @@ private string skipLine(ref string input, ref size_t idx, ref Location loc)
 }
 
 private string skipLine(ref string input, ref Location loc)
-{
+@safe {
 	size_t idx = 0;
 	auto ret = skipLine(input, idx, loc);
 	input = input[idx .. $];
@@ -1334,7 +1341,7 @@ private string skipLine(ref string input, ref Location loc)
 }
 
 private void parseAttributes(ref string input, ref size_t i, ref Node node, in ref Location loc)
-{
+@safe {
 	assert(i < input.length && input[i] == '(');
 	i++;
 
@@ -1378,7 +1385,7 @@ private void parseAttributes(ref string input, ref size_t i, ref Node node, in r
 }
 
 private void parseAttributeText(string input, ref AttributeContent[] dst, in ref Location loc)
-{
+@safe {
 	size_t sidx = 0, idx = 0;
 
 	void flushText()
@@ -1415,7 +1422,7 @@ private void parseAttributeText(string input, ref AttributeContent[] dst, in ref
 }
 
 private string skipUntilClosingBrace(in ref string s, ref size_t idx, in ref Location loc)
-{
+@safe {
 	import std.algorithm.comparison : among;
 
 	int level = 0;
@@ -1432,7 +1439,7 @@ private string skipUntilClosingBrace(in ref string s, ref size_t idx, in ref Loc
 }
 
 private string skipUntilClosingBracket(in ref string s, ref size_t idx, in ref Location loc)
-{
+@safe {
 	import std.algorithm.comparison : among;
 
 	int level = 0;
@@ -1449,7 +1456,7 @@ private string skipUntilClosingBracket(in ref string s, ref size_t idx, in ref L
 }
 
 private string skipIdent(in ref string s, ref size_t idx, string additional_chars, in ref Location loc, bool accept_empty = false, bool require_alpha_start = false)
-{
+@safe {
 	import std.ascii : isAlpha;
 
 	size_t start = idx;
@@ -1476,7 +1483,7 @@ private string skipIdent(in ref string s, ref size_t idx, string additional_char
 
 /// Skips all trailing spaces and tab characters of the input string.
 private string skipIndent(ref string input)
-{
+@safe {
 	size_t idx = 0;
 	while (idx < input.length && isIndentChar(input[idx]))
 		idx++;
@@ -1485,10 +1492,10 @@ private string skipIndent(ref string input)
 	return ret;
 }
 
-private bool isIndentChar(dchar ch) { return ch == ' ' || ch == '\t'; }
+private bool isIndentChar(dchar ch) @safe { return ch == ' ' || ch == '\t'; }
 
 private string skipAnyWhitespace(in ref string s, ref size_t idx)
-{
+@safe {
 	import std.ascii : isWhite;
 
 	size_t start = idx;
@@ -1500,7 +1507,7 @@ private string skipAnyWhitespace(in ref string s, ref size_t idx)
 }
 
 private bool isStringLiteral(string str)
-{
+@safe {
 	size_t i = 0;
 
 	// skip leading white space
@@ -1529,7 +1536,7 @@ private bool isStringLiteral(string str)
 	return i == str.length;
 }
 
-unittest {
+@safe unittest {
 	assert(isStringLiteral(`""`));
 	assert(isStringLiteral(`''`));
 	assert(isStringLiteral(`"hello"`));
@@ -1556,7 +1563,7 @@ unittest {
 }
 
 private string skipExpression(in ref string s, ref size_t idx, in ref Location loc, bool multiline = false)
-{
+@safe {
 	string clamp_stack;
 	size_t start = idx;
 	outer:
@@ -1593,7 +1600,7 @@ private string skipExpression(in ref string s, ref size_t idx, in ref Location l
 }
 
 private string skipAttribString(in ref string s, ref size_t idx, char delimiter, in ref Location loc)
-{
+@safe {
 	size_t start = idx;
 	while( idx < s.length ){
 		if( s[idx] == '\\' ){
@@ -1608,7 +1615,7 @@ private string skipAttribString(in ref string s, ref size_t idx, char delimiter,
 }
 
 private bool matchesName(string filename, string logical_name, string parent_name)
-{
+@safe {
 	import std.path : extension;
 	if (filename == logical_name) return true;
 	auto ext = extension(parent_name);
