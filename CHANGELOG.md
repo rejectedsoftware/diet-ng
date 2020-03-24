@@ -1,6 +1,24 @@
 Changelog
 =========
 
+v1.7.0 - 2020-03-24
+-------------------
+
+- Adds support for a new "live mode" (by Steven Schveighoffer) - [pull #70][issue70], [pull #78][issue78]
+	- Enabled by defining a version `DietUseLive`
+	- Allows changes to the template to be reflected immediately at runtime
+	- Only pure HTML changes are supported, changing embedded code will require a re-compile
+	- Can greatly reduce the edit cycle during development - should not be used for production builds
+- Avoids redundant template compilations for templats instantiated with the same parameters (by Steven Schveighoffer) - [pull #77][issue77]
+- Fixed a possible range violation error (by Steven Schveighoffer) - [issue #75][issue75], [pull #76][issue76]
+
+[issue70]: https://github.com/rejectedsoftware/diet-ng/issues/70
+[issue75]: https://github.com/rejectedsoftware/diet-ng/issues/75
+[issue76]: https://github.com/rejectedsoftware/diet-ng/issues/76
+[issue77]: https://github.com/rejectedsoftware/diet-ng/issues/77
+[issue78]: https://github.com/rejectedsoftware/diet-ng/issues/78
+
+
 v1.6.1 - 2019-10-25
 -------------------
 
