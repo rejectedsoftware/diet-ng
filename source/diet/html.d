@@ -186,6 +186,10 @@ private template realCompileHTMLDietFileString(string filename, alias contents, 
 */
 template compileHTMLDietFileString(string filename, alias contents, ALIASES...)
 {
+	// This import should be REMOVED for 2.0.0, as it was unintentionally
+	// exposed for use inside the mixin. See issue #81
+	import std.conv : to;
+
 	alias TRAITS = DietTraits!ALIASES;
 
 	alias _dietParser = realCompileHTMLDietFileString!(filename, contents, TRAITS)._dietParser;
