@@ -801,7 +801,7 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref 
 				auto np = processNode(n);
 				if (!np.isNull()) {
 					if (ret.isNull) ret = nodes[0 .. i];
-					ret.get ~= np;
+					ret.get ~= np.get;
 				} else if (!ret.isNull) ret.get ~= n;
 			}
 			if (ret.isNull && nodes.length) ret = nodes;
