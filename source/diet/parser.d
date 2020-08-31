@@ -672,8 +672,8 @@ Document parseDiet(alias TR = identity)(const(InputFile)[] files)
 string identity(string str) nothrow @safe @nogc { return str; }
 
 
-private string parseIdent(in ref string str, ref size_t start,
-	   	string breakChars, in ref Location loc)
+private string parseIdent(in string str, ref size_t start,
+	   	string breakChars, in Location loc)
 @safe {
 	import std.array : back;
 	/* The stack is used to keep track of opening and
@@ -1340,7 +1340,7 @@ private string skipLine(ref string input, ref Location loc)
 	return ret;
 }
 
-private void parseAttributes(ref string input, ref size_t i, ref Node node, in ref Location loc)
+private void parseAttributes(ref string input, ref size_t i, ref Node node, in Location loc)
 @safe {
 	assert(i < input.length && input[i] == '(');
 	i++;
@@ -1384,7 +1384,7 @@ private void parseAttributes(ref string input, ref size_t i, ref Node node, in r
 	i++;
 }
 
-private void parseAttributeText(string input, ref AttributeContent[] dst, in ref Location loc)
+private void parseAttributeText(string input, ref AttributeContent[] dst, in Location loc)
 @safe {
 	size_t sidx = 0, idx = 0;
 
@@ -1421,7 +1421,7 @@ private void parseAttributeText(string input, ref AttributeContent[] dst, in ref
 	input = input[idx .. $];
 }
 
-private string skipUntilClosingBrace(in ref string s, ref size_t idx, in ref Location loc)
+private string skipUntilClosingBrace(in string s, ref size_t idx, in Location loc)
 @safe {
 	import std.algorithm.comparison : among;
 
@@ -1438,7 +1438,7 @@ private string skipUntilClosingBrace(in ref string s, ref size_t idx, in ref Loc
 	assert(false);
 }
 
-private string skipUntilClosingBracket(in ref string s, ref size_t idx, in ref Location loc)
+private string skipUntilClosingBracket(in string s, ref size_t idx, in Location loc)
 @safe {
 	import std.algorithm.comparison : among;
 
@@ -1455,7 +1455,8 @@ private string skipUntilClosingBracket(in ref string s, ref size_t idx, in ref L
 	assert(false);
 }
 
-private string skipIdent(in ref string s, ref size_t idx, string additional_chars, in ref Location loc, bool accept_empty = false, bool require_alpha_start = false)
+private string skipIdent(in string s, ref size_t idx, string additional_chars,
+	in Location loc, bool accept_empty = false, bool require_alpha_start = false)
 @safe {
 	import std.ascii : isAlpha;
 
@@ -1494,7 +1495,7 @@ private string skipIndent(ref string input)
 
 private bool isIndentChar(dchar ch) @safe { return ch == ' ' || ch == '\t'; }
 
-private string skipAnyWhitespace(in ref string s, ref size_t idx)
+private string skipAnyWhitespace(in string s, ref size_t idx)
 @safe {
 	import std.ascii : isWhite;
 
@@ -1562,7 +1563,7 @@ private bool isStringLiteral(string str)
 	assert(!isStringLiteral(`"name" value="#{name}"`));
 }
 
-private string skipExpression(in ref string s, ref size_t idx, in ref Location loc, bool multiline = false)
+private string skipExpression(in string s, ref size_t idx, in Location loc, bool multiline = false)
 @safe {
 	string clamp_stack;
 	size_t start = idx;
@@ -1599,7 +1600,8 @@ private string skipExpression(in ref string s, ref size_t idx, in ref Location l
 	return ctstrip(s[start .. idx]);
 }
 
-private string skipAttribString(in ref string s, ref size_t idx, char delimiter, in ref Location loc)
+
+private string skipAttribString(in string s, ref size_t idx, char delimiter, in Location loc)
 @safe {
 	size_t start = idx;
 	while( idx < s.length ){

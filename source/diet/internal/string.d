@@ -38,7 +38,7 @@ string dstringEscape(char ch)
 	}
 }
 
-string dstringEscape(in ref string str)
+string dstringEscape(in string str)
 {
 	string ret;
 	foreach( ch; str ) ret ~= dstringEscape(ch);
