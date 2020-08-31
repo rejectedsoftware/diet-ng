@@ -163,7 +163,7 @@ NodeContent[] toNodeContent(in AttributeContent[] contents, Location loc)
 			text = The text to append to the node
 			loc = Location in the source file
 	*/
-	void addText(string text, in ref Location loc)
+	void addText(string text, in Location loc)
 	{
 		if (contents.length && contents[$-1].kind == NodeContent.Kind.text && contents[$-1].loc == loc)
 			contents[$-1].value ~= text;
@@ -405,7 +405,7 @@ struct NodeContent {
 	}
 
 	/// Compares node content for equality.
-	bool opEquals(in ref NodeContent other)
+	bool opEquals(const scope ref NodeContent other)
 	const {
 		if (this.kind != other.kind) return false;
 		if (this.loc != other.loc) return false;
