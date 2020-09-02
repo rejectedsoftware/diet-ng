@@ -1,6 +1,14 @@
 Changelog
 =========
 
+v1.7.2 - 2020-03-25
+-------------------
+
+- Add back in import for `std.conv.to` - [issue #82][issue82]
+
+[issue82]: https://github.com/rejectedsoftware/diet-ng/issues/82
+
+
 v1.7.1 - 2020-03-24
 -------------------
 
