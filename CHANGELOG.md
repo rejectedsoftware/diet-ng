@@ -1,6 +1,17 @@
 Changelog
 =========
 
+v1.7.3 - 2020-09-02
+-------------------
+
+- Fix a deprecated Nullable alias this instance - [issue #84][issue84]
+- Add support for DMD 2.094 `-preview=in` switch - [issue #85][issue85]
+- Update release notes & meson build for v1.7.3 - [issue #86][issue86]
+
+[issue84]: https://github.com/rejectedsoftware/diet-ng/issues/84
+[issue85]: https://github.com/rejectedsoftware/diet-ng/issues/85
+[issue86]: https://github.com/rejectedsoftware/diet-ng/issues/86
+
 v1.7.2 - 2020-03-25
 -------------------
 
