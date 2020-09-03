@@ -180,7 +180,6 @@ private template realCompileHTMLDietFileString(string filename, alias contents, 
 		ALIASES = A list of variables to make available inside of the template,
 			as well as traits structs annotated with the `@dietTraits`
 			attribute.
-		dst = The output range to write the generated HTML to.
 
 	See_Also: `compileHTMLDietFile`, `compileHTMLDietString`, `compileHTMLDietStrings`
 */
@@ -204,6 +203,12 @@ template compileHTMLDietFileString(string filename, alias contents, ALIASES...)
 			mixin(_dietParser);
 		}
 
+		/**
+		 * See `.compileHTMLDietFileString`
+		 *
+		 * Params:
+		 *	   dst = The output range to write the generated HTML to.
+		 */
 		void compileHTMLDietFileString(R)(ref R dst)
 		{
 			// first, load the data
@@ -220,6 +225,12 @@ template compileHTMLDietFileString(string filename, alias contents, ALIASES...)
 			mixin(_dietParser);
 		}
 
+		/**
+		 * See `.compileHTMLDietFileString`
+		 *
+		 * Params:
+		 *	   dst = The output range to write the generated HTML to.
+		 */
 		void compileHTMLDietFileString(R)(ref R dst)
 		{
 			exec(dst);
