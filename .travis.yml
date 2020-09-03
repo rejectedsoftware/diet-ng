@@ -45,6 +45,7 @@ script:
   - dub test
   - dub build --root examples/htmlgenerator
   - dub build --root examples/htmlserver
+  - dub build -b ddox
   # test building with Meson
   - mkdir build && cd build
   #- meson ..
