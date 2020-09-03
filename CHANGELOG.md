@@ -1,6 +1,13 @@
 Changelog
 =========
 
+v1.7.4 - 2020-09-03
+-------------------
+
+- Fix documentation build and update test settings - [issue #87][issue87]
+
+[issue87]: https://github.com/rejectedsoftware/diet-ng/issues/87
+
 v1.7.3 - 2020-09-02
 -------------------
 
