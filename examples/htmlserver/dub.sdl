@@ -1,6 +1,6 @@
 name "htmlserver"
 dependency "diet-ng" path="../.."
-dependency "vibe-d" version="~>0.8.5"
+dependency "vibe-d" version="~>0.9.0"
 configuration "application" {
     targetType "executable"
 }
