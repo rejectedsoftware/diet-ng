@@ -19,7 +19,8 @@ private template _dietFileData(string filename)
 
 /** Compiles a Diet template file that is available as a string import.
 
-	The final HTML will be written to the given `_diet_output` output range.
+	The resulting HTML is written to the output range given as a runtime
+	parameter.
 
 	Params:
 		filename = Name of the main Diet template file.
@@ -34,6 +35,15 @@ private template _dietFileData(string filename)
 		HTML.
 
 	See_Also: `compileHTMLDietString`, `compileHTMLDietStrings`
+
+	Example:
+		---
+		import std.array : appender;
+
+		auto text = appender!string;
+		text.compileHTMLDietFile!("invitation-email.diet", name, address);
+		sendMail(address, text.data);
+		---
 */
 template compileHTMLDietFile(string filename, ALIASES...)
 {
