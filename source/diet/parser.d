@@ -830,8 +830,8 @@ private Node[] parseDietWithExtensions(FileInfo[] files, size_t file_index, ref 
 			if (ret.isNull) ret = [];
 		} else if (n.name == "include") {
 			auto name = extractFilename(n);
-			auto fidx = files.countUntil!(f => matchesName(f.name, name, files[file_index].name));
-			enforcep(fidx >= 0, "Missing include input file: "~name, n.loc);
+			auto fidx = files.countUntil!(f => matchesName(f.name, name, n.loc.file));
+			enforcep(fidx >= 0, "Missing include input file: "~name~" for "~n.loc.file, n.loc);
 
 			if (n.contents.length > 1) {
 				auto dummy = new Node(n.loc, "extends");
