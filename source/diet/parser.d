@@ -518,7 +518,7 @@ Document parseDiet(alias TR = identity)(const(InputFile)[] files)
 		new Node(Location("inc.dt", 0), "p", null, null)
 	]));
 	testFail("include main", "Dependency cycle detected for this module.");
-	testFail("include inc2", "Missing include input file: inc2");
+	testFail("include inc2", "Missing include input file: inc2 for main.dt");
 	testFail("include #{p}", "Dynamic includes are not supported.");
 	testFail("include inc\n\tp", "Only 'block' allowed as children of includes.");
 	testFail("p\ninclude inc\n\tp", "Only 'block' allowed as children of includes.");
