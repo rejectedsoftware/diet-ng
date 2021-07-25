@@ -71,6 +71,9 @@ Document parseDiet(alias TR = identity)(const(InputFile)[] files)
 	import diet.traits;
 	import std.algorithm.iteration : map;
 	import std.array : array;
+
+	assert(files.length > 0, "Empty set of input files");
+
 	FileInfo[] parsed_files = files.map!(f => FileInfo(f.name, parseDietRaw!TR(f))).array;
 	BlockInfo[] blocks;
 	return new Document(parseDietWithExtensions(parsed_files, 0, blocks, null));
