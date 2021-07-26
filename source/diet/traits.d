@@ -64,14 +64,17 @@ import diet.dom;
 	`!{...}`, where the contents form an arbitrary D expression. The
 	translation function is required to pass these through unmodified.
 */
-string translate(TRAITS...)(string text)
+string translate(TRAITS...)(string text, string context = null)
 {
 	import std.traits : hasUDA;
 
 	foreach (T; TRAITS) {
 		static assert(hasUDA!(T, DietTraitsAttribute));
-		static if (is(typeof(&T.translate)))
-			text = T.translate(text);
+		static if (is(typeof(&T.translate))) {
+			static if (is(typeof(T.translate(text, context))))
+				text = T.translate(text, context);
+			else text = T.translate(text);
+		}
 	}
 	return text;
 }
