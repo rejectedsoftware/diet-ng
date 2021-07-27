@@ -136,13 +136,13 @@ private InputFile[] merge(InputFile[] a, InputFile[] b)
 
   Params:
 		file = The root file that will be used to find all referenced files.
-		baseDir = Optional base directory from which all files will be searched.
+		source_directories = Optional base directory list from which all files will be searched.
 
   Returns:
 		An array of InputFile structs containing the list of files that are
 		referenced from the root file, and their contents.
 */
-InputFile[] rtGetInputs(string file, string baseDir = "")
+InputFile[] rtGetInputs(string file, string[] source_directories...)
 {
 	// for each of the files, import the file, get all the references, and
 	// continually import files until we have them all.
@@ -150,32 +150,41 @@ InputFile[] rtGetInputs(string file, string baseDir = "")
 	import std.file : readText, exists;
 	import diet.internal.string : stripUTF8BOM;
 	import std.algorithm : canFind;
-	import std.path : extension;
+	import std.path : buildPath, extension;
+
+	if (!source_directories.length)
+		source_directories = [""];
+
 	auto ext = extension(file);
 	string[] filesToProcess = [file];
 	InputFile[] result;
-	void addFile(string fname)
-	{
-		if(!filesToProcess.canFind(fname) && !result.canFind!(g => g.name == fname))
+
+	void addFile(string fname) {
+		if (!filesToProcess.canFind(fname) && !result.canFind!(g => g.name == fname))
 			filesToProcess ~= fname;
 	}
-	while(filesToProcess.length)
-	{
+
+	next_file:
+	while (filesToProcess.length) {
 		auto nextFile = filesToProcess.front;
-		filesToProcess.popFront;
-		if(!exists(chain(baseDir, nextFile)))
-		{
-			if(!exists(chain(baseDir, nextFile, ext)))
-				throw new Exception("Cannot find necessary file " ~ nextFile ~ " to parse strings for " ~ file);
-			addFile(nextFile ~ ext);
-			continue;
+		filesToProcess.popFront();
+		foreach (dir; source_directories) {
+			if (exists(buildPath(dir, nextFile))) {
+				auto newInput = InputFile(nextFile, stripUTF8BOM(readText(buildPath(dir, nextFile))));
+				result ~= newInput;
+				foreach (f; collectReferences(newInput.contents))
+					addFile(f);
+				continue next_file;
+			}
+
+			if (exists(buildPath(dir, nextFile ~ ext))) {
+				addFile(nextFile ~ ext);
+				continue next_file;
+			}
 		}
-		auto newInput = InputFile(nextFile, stripUTF8BOM(readText(chain(baseDir, nextFile))));
-		result ~= newInput;
-		foreach(f; collectReferences(newInput.contents))
-		{
-			addFile(f);
-		}
+		throw new Exception("Cannot find necessary file " ~ nextFile ~ " to parse strings for " ~ file);
 	}
+
+	assert(result.length > 0);
 	return result;
 }

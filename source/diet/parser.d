@@ -56,7 +56,7 @@ version(unittest)
 		The list of parsed root nodes is returned.
 */
 Document parseDiet(alias TR = identity)(string text, string filename = "string")
-	if (is(typeof(TR(string.init)) == string))
+	if (is(typeof(TR(string.init)) == string) || is(typeof(TR(string.init, string.init)) == string))
 {
 	InputFile[1] f;
 	f[0].name = filename;
@@ -66,11 +66,14 @@ Document parseDiet(alias TR = identity)(string text, string filename = "string")
 
 /// Ditto
 Document parseDiet(alias TR = identity)(const(InputFile)[] files)
-	if (is(typeof(TR(string.init)) == string))
+	if (is(typeof(TR(string.init)) == string) || is(typeof(TR(string.init, string.init)) == string))
 {
 	import diet.traits;
 	import std.algorithm.iteration : map;
 	import std.array : array;
+
+	assert(files.length > 0, "Empty set of input files");
+
 	FileInfo[] parsed_files = files.map!(f => FileInfo(f.name, parseDietRaw!TR(f))).array;
 	BlockInfo[] blocks;
 	return new Document(parseDietWithExtensions(parsed_files, 0, blocks, null));
@@ -669,7 +672,7 @@ Document parseDiet(alias TR = identity)(const(InputFile)[] files)
 
 /** Dummy translation function that returns the input unmodified.
 */
-string identity(string str) nothrow @safe @nogc { return str; }
+string identity(string str, string context = null) nothrow @safe @nogc { return str; }
 
 
 private string parseIdent(in string str, ref size_t start,
@@ -1223,6 +1226,7 @@ private bool parseTag(ref string input, ref size_t idx, ref Node dst, ref bool h
 private void parseTextLine(alias TR, bool translate = true)(ref string input, ref Node dst, ref Location loc)
 {
 	import std.algorithm.comparison : among;
+	import std.path : baseName, stripExtension;
 
 	size_t idx = 0;
 
@@ -1231,7 +1235,10 @@ private void parseTextLine(alias TR, bool translate = true)(ref string input, re
 		auto kln = skipLine(input, idx, loc);
 		input = input[idx .. $];
 		dst.translationKey ~= kln;
-		auto tln = TR(kln);
+		static if (is(typeof(TR(string.init, string.init))))
+			auto tln = TR(kln, loc.file.baseName.stripExtension);
+		else
+			auto tln = TR(kln);
 		parseTextLineRaw(tln, dst, loccopy);
 		return;
 	}

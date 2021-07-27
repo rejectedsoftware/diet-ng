@@ -1,0 +1,8 @@
+name "makepot"
+description "Generates a POT translation template from a set of Diet templates"
+authors "Sönke Ludwig"
+copyright "Copyright © 2021 Sönke Ludwig"
+license "MIT"
+targetName "makepot"
+
+dependency "diet-ng" path=".."

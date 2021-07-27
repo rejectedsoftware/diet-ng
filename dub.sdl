@@ -5,3 +5,5 @@ copyright "Copyright © 2015-2016 Sönke Ludwig"
 license "MIT"
 
 x:ddoxFilterArgs "--ex" "diet.internal."
+
+subPackage "makepot"
