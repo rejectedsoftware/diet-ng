@@ -1,6 +1,15 @@
 Changelog
 =========
 
+v1.8.0 - 2021-07-27
+-------------------
+
+- The translation callback can now take an optional `context` parameter with the name of the source template - [pull #92][issue92]
+- Added a "makepot" tool to extract translation keys from a set of Diet template files - [pull #92][issue92]
+
+[issue92]: https://github.com/rejectedsoftware/diet-ng/issues/92
+
+
 v1.7.4 - 2020-09-03
 -------------------
 
