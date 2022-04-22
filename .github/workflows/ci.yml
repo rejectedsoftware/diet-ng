@@ -30,9 +30,8 @@ jobs:
 
             - name: Run tests
               env:
+                DC: ${{matrix.dc}}
                 CONFIG: ${{matrix.config}}
                 ARCH: ${{matrix.arch}}
               shell: bash
-              run: |
-                dub test
-                dub build :makepot
+              run: ./test.sh
