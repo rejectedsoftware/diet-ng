@@ -257,7 +257,7 @@ NodeContent[] toNodeContent(in AttributeContent[] contents, Location loc)
 		return this.opEquals(other);
 	}
 
-	bool opEquals(in Node other) const { return this.tupleof == other.tupleof; }
+	bool opEquals(scope const Node other) scope const { return this.tupleof == other.tupleof; }
 }
 
 
@@ -406,7 +406,7 @@ struct NodeContent {
 
 	/// Compares node content for equality.
 	bool opEquals(const scope ref NodeContent other)
-	const {
+	const scope {
 		if (this.kind != other.kind) return false;
 		if (this.loc != other.loc) return false;
 		if (this.value != other.value) return false;
