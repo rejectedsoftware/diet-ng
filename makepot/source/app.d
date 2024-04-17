@@ -10,7 +10,9 @@ import std.stdio;
 int main(string[] args)
 {
 	if (args.length < 2) {
-		writefln("USAGE: %s <base-directory> [<import-directory1> [...]]\n");
+		writefln("USAGE: %s <base-directory> [<import-directory1> [...]]\n", args[0]);
+		writeln("   <base-directory>    Specifies the main directory containing diet templates");
+		writeln("   <import-directory>  Any additional template directories to satisfy imports");
 		return 1;
 	}
 
