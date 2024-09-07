@@ -1462,8 +1462,8 @@ private string skipUntilClosingBracket(in string s, ref size_t idx, in Location 
 	assert(false);
 }
 
-private string skipIdent(in string s, ref size_t idx, string additional_chars,
-	in Location loc, bool accept_empty = false, bool require_alpha_start = false)
+private string skipIdent(string s, ref size_t idx, string additional_chars,
+	Location loc, bool accept_empty = false, bool require_alpha_start = false)
 @safe {
 	import std.ascii : isAlpha;
 
