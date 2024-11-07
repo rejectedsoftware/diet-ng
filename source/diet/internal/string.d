@@ -45,7 +45,7 @@ string dstringEscape(in string str)
 	return ret;
 }
 
-string dstringUnescape(in string str)
+string dstringUnescape(in return string str)
 {
 	string ret;
 	size_t i, start = 0;

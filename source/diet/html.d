@@ -738,7 +738,7 @@ private string getDoctypeMixin(ref CTX ctx, in Node node) @safe
 	return ctx.rawText(node.loc, "<"~doctype_str~">");
 }
 
-private string getCodeMixin(ref CTX ctx, const ref Node node, bool in_pre) @safe
+private string getCodeMixin(ref CTX ctx, in Node node, bool in_pre) @safe
 {
 	enforcep(node.attributes.length == 0, "Code lines may not have attributes.", node.loc);
 	enforcep(node.attribs == NodeAttribs.none, "Code lines may not specify translation or text block suffixes.", node.loc);
@@ -762,7 +762,7 @@ private string getCodeMixin(ref CTX ctx, const ref Node node, bool in_pre) @safe
 	return ret;
 }
 
-private string getCommentMixin(ref CTX ctx, const ref Node node) @safe
+private string getCommentMixin(ref CTX ctx, in Node node) @safe
 {
 	string ret = ctx.rawText(node.loc, "<!--");
 	ctx.depth++;

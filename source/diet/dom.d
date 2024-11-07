@@ -125,6 +125,9 @@ NodeContent[] toNodeContent(in AttributeContent[] contents, Location loc)
 	/// Original text used to look up the translation (only set if translated)
 	string translationKey;
 
+
+scope:
+
 	/// Constructs a new node.
 	this(Location loc = Location.init, string name = null,
 		Attribute[] attributes = null, NodeContent[] contents = null,
@@ -163,7 +166,7 @@ NodeContent[] toNodeContent(in AttributeContent[] contents, Location loc)
 			text = The text to append to the node
 			loc = Location in the source file
 	*/
-	void addText(string text, in Location loc)
+	void addText(string text, ref const Location loc)
 	{
 		if (contents.length && contents[$-1].kind == NodeContent.Kind.text && contents[$-1].loc == loc)
 			contents[$-1].value ~= text;
@@ -179,7 +182,7 @@ NodeContent[] toNodeContent(in AttributeContent[] contents, Location loc)
 
 	/** Determines if this node has any non-whitespace contents. */
 	bool hasNonWhitespaceContent()
-	const {
+	const scope {
 		import std.algorithm.searching : any;
 		return contents.any!(c => c.kind != NodeContent.Kind.text || c.value.ctstrip.length > 0);
 	}
