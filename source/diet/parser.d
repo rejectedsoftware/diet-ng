@@ -1121,6 +1121,27 @@ private Node parseTagLine(alias TR)(ref string input, ref Location loc, out bool
 	return ret;
 }
 
+private void parseWhitespaceControl(ref string input, ref size_t idx, ref Node dst)
+@safe {
+	// avoid whitespace inside of tag
+	if (idx < input.length && input[idx] == '<') {
+		idx++;
+		dst.attribs |= NodeAttribs.fitInside;
+	}
+
+	// avoid whitespace outside of tag
+	if (idx < input.length && input[idx] == '>') {
+		idx++;
+		dst.attribs |= NodeAttribs.fitOutside;
+	}
+
+	// avoid whitespace inside of tag (also allowed after >)
+	if (!(dst.attribs & NodeAttribs.fitInside) && idx < input.length && input[idx] == '<') {
+		idx++;
+		dst.attribs |= NodeAttribs.fitInside;
+	}
+}
+
 private bool parseTag(ref string input, ref size_t idx, ref Node dst, ref bool has_nested, ref Location loc)
 @safe {
 	import std.ascii : isWhite;
@@ -1158,23 +1179,7 @@ private bool parseTag(ref string input, ref size_t idx, ref Node dst, ref bool h
 	if (idx < input.length && input[idx] == '(')
 		parseAttributes(input, idx, dst, loc);
 
-	// avoid whitespace inside of tag
-	if (idx < input.length && input[idx] == '<') {
-		idx++;
-		dst.attribs |= NodeAttribs.fitInside;
-	}
-
-	// avoid whitespace outside of tag
-	if (idx < input.length && input[idx] == '>') {
-		idx++;
-		dst.attribs |= NodeAttribs.fitOutside;
-	}
-
-	// avoid whitespace inside of tag (also allowed after >)
-	if (!(dst.attribs & NodeAttribs.fitInside) && idx < input.length && input[idx] == '<') {
-		idx++;
-		dst.attribs |= NodeAttribs.fitInside;
-	}
+	parseWhitespaceControl(input, idx, dst);
 
 	// translate text contents
 	if (idx < input.length && input[idx] == '&') {
