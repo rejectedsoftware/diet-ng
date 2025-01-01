@@ -544,7 +544,7 @@ private string getElementMixin(ref CTX ctx, in Node node, bool in_pre) @safe
 			case "area", "base", "basefont", "br", "col", "embed", "frame",	"hr", "img", "input",
 					"keygen", "link", "meta", "param", "source", "track", "wbr":
 				is_singular_tag = true;
-				need_newline = true;
+				need_newline = ctx.pretty;
 				break;
 		}
 	} else if (!node.hasNonWhitespaceContent) is_singular_tag = true;
