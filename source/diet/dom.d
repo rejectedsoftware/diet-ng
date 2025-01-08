@@ -271,8 +271,8 @@ enum NodeAttribs {
 	translated = 1<<0,  /// Translate node contents
 	textNode = 1<<1,    /// All nested lines are treated as text
 	rawTextNode = 1<<2, /// All nested lines are treated as raw text (no interpolations or inline tags)
-	fitOutside = 1<<3,  /// Don't insert white space outside of the node when generating output (currently ignored by the HTML generator)
-	fitInside = 1<<4,   /// Don't insert white space around the node contents when generating output (currently ignored by the HTML generator)
+	fitOutside = 1<<3,  /// Don't insert white space outside of the node when generating output
+	fitInside = 1<<4,   /// Don't insert white space around the node contents when generating output
 }
 
 

@@ -520,10 +520,16 @@ private string getHTMLMixin(ref CTX ctx, in Node node, bool in_pre) @safe
 		case Node.SpecialName.hidden: return null;
 		case Node.SpecialName.text:
 			string ret;
-			foreach (i, c; node.contents)
-				ret ~= ctx.getNodeContentsMixin(c, in_pre);
-			if (in_pre) ctx.plainNewLine();
-			else ctx.prettyNewLine();
+			if (node.contents.length == 0) {
+				ret ~= ctx.outputPendingNewline();
+				if (in_pre) ctx.plainNewLine();
+				else ctx.prettyNewLine();
+				ret ~= ctx.outputPendingNewline();
+			} else {
+				foreach (i, c; node.contents)
+					ret ~= ctx.getNodeContentsMixin(c, in_pre);
+				if (in_pre) ctx.plainNewLine();
+			}
 			return ret;
 	}
 }
@@ -544,7 +550,7 @@ private string getElementMixin(ref CTX ctx, in Node node, bool in_pre) @safe
 			case "area", "base", "basefont", "br", "col", "embed", "frame",	"hr", "img", "input",
 					"keygen", "link", "meta", "param", "source", "track", "wbr":
 				is_singular_tag = true;
-				need_newline = true;
+				need_newline = ctx.pretty;
 				break;
 		}
 	} else if (!node.hasNonWhitespaceContent) is_singular_tag = true;
@@ -1208,4 +1214,77 @@ unittest { // issue #45 - no singular tags for XML
 unittest { // output empty tags as singular for XML output
 	assert(utCompile!("doctype html\nfoo") == `<!DOCTYPE html><foo></foo>`);
 	assert(utCompile!("doctype xml\nfoo") == `<?xml version="1.0" encoding="utf-8" ?><foo/>`);
+}
+
+unittest { // generate newlines on empty text nodes
+	@dietTraits struct T { enum HTMLOutputStyle htmlOutputStyle = HTMLOutputStyle.pretty; }
+	assert(utCompile!(`doctype html
+html
+	body
+		div
+			a
+				|
+				| 1
+				|
+			a<
+				|
+				| 2
+				|
+			a>
+				|
+				| 3
+				|
+			a<>
+				|
+				| 4
+				|
+			a
+				|
+				| 5
+				|
+		div
+			a
+				| 1
+			a<
+				| 2
+			a>
+				| 3
+			a<>
+				| 4
+			a
+				| 5`, T) == `<!DOCTYPE html>
+<html>
+	<body>
+		<div>
+			<a>
+				
+				1
+				
+			</a>
+			<a>
+				2
+				</a><a>
+				
+				3
+				
+			</a><a>
+				4
+				</a><a>
+				
+				5
+				
+			</a>
+		</div>
+		<div>
+			<a>
+				1
+			</a>
+			<a>2</a><a>
+				3
+			</a><a>4</a><a>
+				5
+			</a>
+		</div>
+	</body>
+</html>`);
 }
