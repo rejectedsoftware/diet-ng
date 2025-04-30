@@ -181,7 +181,7 @@ void filterHTMLEscape(R)(ref R dst, dchar ch, HTMLEscapeFlags flags = HTMLEscape
 		case '0': .. case '9': goto case;
 		case ' ', '\t', '-', '_', '.', ':', ',', ';',
 			 '#', '+', '*', '?', '=', '(', ')', '/', '!',
-			 '%' , '{', '}', '[', ']', '`', '´', '$', '^', '~':
+			 '%' , '{', '}', '[', ']', '`', '$', '^', '~':
 			dst.put(cast(char)ch);
 			break;
 		case '<': dst.put("&lt;"); break;
@@ -249,4 +249,15 @@ private struct StringAppender {
 		char[4] dst;
 		data ~= dst[0 .. encode(dst, ch)];
 	}
+}
+
+unittest {
+	// ASCII special characters
+	auto str1 = "!\"#$%&'()*+,-./:;<=>?[\\]^_`{|}~";
+	assert(htmlEscape(str1) == "!\"#$%&amp;'()*+,-./:;&lt;=&gt;?[\\]^_`{|}~");
+	assert(htmlAttribEscape(str1) == "!&quot;#$%&amp;&#39;()*+,-./:;&lt;=&gt;?[\\]^_`{|}~");
+
+	// non-ASCII special characters
+	auto str2 = " ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿";
+	assert(htmlEscape(str2) == str2);
 }
